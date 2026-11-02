@@ -1,17 +1,27 @@
 package com.talotv.os.core.media
 
+data class AppHeroSuggestion(
+    val title: String,
+    val backdropResId: Int? = null,
+    val backdropUrl: String? = null,
+    val intentUri: String? = null,
+    val hasTitleInImage: Boolean = true
+)
+
 data class MediaSpotlight(
     val id: String,
     val appKey: String,
     val title: String,
-    val badge: String,
-    val tagline: String,
-    val category: String,
+    val badge: String = "",
+    val tagline: String = "",
+    val category: String = "",
     val year: String = "2026",
     val rating: String = "12+",
-    val gradientColors: List<Long>,
+    val gradientColors: List<Long> = listOf(0xFF1E3A8A, 0xFF0F172A, 0xFF020617),
     val backdropUrl: String? = null,
-    val logoText: String = title
+    val backdropResId: Int? = null,
+    val logoText: String = title,
+    val heroSuggestion: AppHeroSuggestion? = null
 )
 
 data class UpNextItem(
@@ -32,7 +42,8 @@ data class DockAppItem(
     val bgGradient: List<Long>,
     val spotlight: MediaSpotlight,
     val iconBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
-    val isBanner: Boolean = false
+    val isBanner: Boolean = false,
+    val heroSuggestion: AppHeroSuggestion? = null
 )
 
 enum class DockIconType {

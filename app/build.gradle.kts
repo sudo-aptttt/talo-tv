@@ -77,4 +77,7 @@ dependencies {
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
+
+    // Offline QR Code Generation
+    implementation("com.google.zxing:core:3.5.3")
 }

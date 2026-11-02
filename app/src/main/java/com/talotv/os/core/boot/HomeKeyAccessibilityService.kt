@@ -102,6 +102,18 @@ class HomeKeyAccessibilityService : AccessibilityService() {
             return true
         }
 
+        // Favorite / Star (★) key detection (Google TV Streamer 4K remote customizable button)
+        val isFavoriteKey = keyCode == KeyEvent.KEYCODE_BOOKMARK ||
+                keyCode == KeyEvent.KEYCODE_STAR ||
+                keyCode == KeyEvent.KEYCODE_BUTTON_1 ||
+                keyCode == KeyEvent.KEYCODE_PROG_RED ||
+                keyCode == 288 /* KEYCODE_TV_INPUT */ ||
+                keyCode == 305 /* KEYCODE_BUTTON_C */
+        if (isFavoriteKey) {
+            Log.d("TaloAccessibility", "Favorite/Star button pressed ($keyCode). Reserved for future action.")
+            // Kept ready for future binding as requested
+        }
+
         return super.onKeyEvent(event)
     }
 }

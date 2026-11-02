@@ -1,5 +1,7 @@
 package com.talotv.os.core.media
 
+import com.talotv.os.R
+
 object ContentRepository {
 
     val fallbackSpotlight = MediaSpotlight(
@@ -12,7 +14,8 @@ object ContentRepository {
         year = "2026",
         rating = "Tous publics",
         gradientColors = listOf(0xFF1E3A8A, 0xFF0F172A, 0xFF020617),
-        logoText = "Talo OS"
+        logoText = "Talo OS",
+        heroSuggestion = null
     )
 
     // Curated catalog of known TV streaming & media applications with signature hero spotlights.
@@ -36,7 +39,8 @@ object ContentRepository {
                 rating = "Tous publics",
                 gradientColors = listOf(0xFF1565C0, 0xFF0D47A1, 0xFF051E44),
                 logoText = "Direct TV"
-            )
+            ),
+            heroSuggestion = null
         ),
         DockAppItem(
             id = "dock-youtube",
@@ -56,7 +60,8 @@ object ContentRepository {
                 rating = "Tous publics",
                 gradientColors = listOf(0xFF8B0000, 0xFF4A0000, 0xFF1A0000),
                 logoText = "YouTube"
-            )
+            ),
+            heroSuggestion = null // Base default spotlight (no movie suggestion)
         ),
         DockAppItem(
             id = "dock-music",
@@ -76,6 +81,10 @@ object ContentRepository {
                 rating = "Tous publics",
                 gradientColors = listOf(0xFFB71C1C, 0xFF5D0B0B, 0xFF1F0303),
                 logoText = "Musique"
+            ),
+            heroSuggestion = AppHeroSuggestion(
+                title = "LIVE ACOUSTIC SESSIONS",
+                backdropResId = R.drawable.backdrop_concert
             )
         ),
         DockAppItem(
@@ -96,6 +105,10 @@ object ContentRepository {
                 rating = "16+",
                 gradientColors = listOf(0xFFE50914, 0xFF540707, 0xFF180101),
                 logoText = "Netflix"
+            ),
+            heroSuggestion = AppHeroSuggestion(
+                title = "STRANGER THINGS",
+                backdropResId = R.drawable.backdrop_stranger_things
             )
         ),
         DockAppItem(
@@ -116,6 +129,10 @@ object ContentRepository {
                 rating = "16+",
                 gradientColors = listOf(0xFF24262C, 0xFF141519, 0xFF000000),
                 logoText = "Prime Video"
+            ),
+            heroSuggestion = AppHeroSuggestion(
+                title = "DUNE",
+                backdropResId = R.drawable.backdrop_dune
             )
         ),
         DockAppItem(
@@ -136,6 +153,10 @@ object ContentRepository {
                 rating = "Tous publics",
                 gradientColors = listOf(0xFF22242B, 0xFF12141A, 0xFF000000),
                 logoText = "Disney+"
+            ),
+            heroSuggestion = AppHeroSuggestion(
+                title = "THE MANDALORIAN",
+                backdropResId = R.drawable.backdrop_mandalorian
             )
         ),
         DockAppItem(
@@ -156,6 +177,10 @@ object ContentRepository {
                 rating = "16+",
                 gradientColors = listOf(0xFF2C2D35, 0xFF15161A, 0xFF000000),
                 logoText = "CANAL+"
+            ),
+            heroSuggestion = AppHeroSuggestion(
+                title = "DUNE",
+                backdropResId = R.drawable.backdrop_dune
             )
         ),
         DockAppItem(
@@ -176,6 +201,10 @@ object ContentRepository {
                 rating = "Tous publics",
                 gradientColors = listOf(0xFFFF8F00, 0xFFE65100, 0xFF3E1200),
                 logoText = "Molotov"
+            ),
+            heroSuggestion = AppHeroSuggestion(
+                title = "LE GRAND FILM DU SOIR",
+                backdropResId = R.drawable.backdrop_nature
             )
         ),
         DockAppItem(
@@ -196,6 +225,10 @@ object ContentRepository {
                 rating = "Tous publics",
                 gradientColors = listOf(0xFF0F9D58, 0xFF0B8043, 0xFF03381B),
                 logoText = "Play Jeux"
+            ),
+            heroSuggestion = AppHeroSuggestion(
+                title = "ASPHALT LEGENDS",
+                backdropResId = R.drawable.backdrop_racing
             )
         ),
         DockAppItem(
@@ -216,6 +249,10 @@ object ContentRepository {
                 rating = "Tous publics",
                 gradientColors = listOf(0xFF880E4F, 0xFF4A148C, 0xFF1A0033),
                 logoText = "SmartTube"
+            ),
+            heroSuggestion = AppHeroSuggestion(
+                title = "EXPLORATION SPATIALE",
+                backdropResId = R.drawable.backdrop_space
             )
         ),
         DockAppItem(
@@ -236,6 +273,10 @@ object ContentRepository {
                 rating = "Tous publics",
                 gradientColors = listOf(0xFF006064, 0xFF004D40, 0xFF00251A),
                 logoText = "Jellyfin"
+            ),
+            heroSuggestion = AppHeroSuggestion(
+                title = "CIVIL WAR",
+                backdropResId = R.drawable.backdrop_cinema
             )
         ),
         DockAppItem(
@@ -256,7 +297,8 @@ object ContentRepository {
                 rating = "Tous publics",
                 gradientColors = listOf(0xFFFF8800, 0xFFB35900, 0xFF3D1F00),
                 logoText = "VLC"
-            )
+            ),
+            heroSuggestion = null
         ),
         DockAppItem(
             id = "app-store",
@@ -276,7 +318,8 @@ object ContentRepository {
                 rating = "Tous publics",
                 gradientColors = listOf(0xFF2C2C2E, 0xFF1C1C1E, 0xFF0D0D0E),
                 logoText = "Play Store"
-            )
+            ),
+            heroSuggestion = null // Strictly no suggestions for store
         ),
         DockAppItem(
             id = "app-settings",
@@ -296,9 +339,14 @@ object ContentRepository {
                 rating = "Système",
                 gradientColors = listOf(0xFF3A3D45, 0xFF23252A, 0xFF101114),
                 logoText = "Paramètres"
-            )
+            ),
+            heroSuggestion = null // Strictly no suggestions for settings ("Quand c'est pas le cas met rien")
         )
     )
+
+    fun getCuratedSuggestionForPackage(packageName: String): AppHeroSuggestion? {
+        return knownDockApps.find { it.packageName == packageName }?.heroSuggestion
+    }
 
     // Backward-compatible dockApps alias
     val dockApps: List<DockAppItem> get() = knownDockApps.take(5)

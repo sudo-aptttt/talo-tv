@@ -86,8 +86,8 @@ object CloudSyncManager {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
                 doOutput = true
-                connectTimeout = 6000
-                readTimeout = 6000
+                connectTimeout = 1500
+                readTimeout = 1500
             }
 
             val nonce = TaloSecurityVault.generateNonce()
@@ -121,6 +121,135 @@ object CloudSyncManager {
         } catch (e: Exception) {
             Log.w(TAG, "Pairing init network error: ${e.message}")
             false
+        }
+    }
+
+    sealed class PairingPollState {
+        object Pending : PairingPollState()
+        data class AwaitingTvConfirmation(val userName: String, val userEmail: String, val isNewAccount: Boolean) : PairingPollState()
+        data class Claimed(val userName: String, val isNewAccount: Boolean, val profiles: List<UserProfile>?) : PairingPollState()
+        data class Error(val error: String) : PairingPollState()
+    }
+
+    /**
+     * Polls server with detailed state detection (detects phone request and prompts TV confirmation)
+     */
+    suspend fun pollPairingStatusDetailed(
+        context: Context,
+        pairingCode: String
+    ): PairingPollState = withContext(Dispatchers.IO) {
+        try {
+            val fingerprint = DeviceFingerprint.getFingerprint(context)
+            val url = URL("$API_BASE/pair.php?action=poll&code=$pairingCode&fingerprint=$fingerprint")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+
+            if (conn.responseCode !in 200..299) {
+                conn.disconnect()
+                return@withContext PairingPollState.Error("Erreur réseau (${conn.responseCode})")
+            }
+
+            val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+
+            val json = JSONObject(responseText)
+            val status = json.optString("status", "")
+
+            if (status == "awaiting_tv_confirmation") {
+                val userName = json.optString("user_name", "Utilisateur Talo")
+                val userEmail = json.optString("user_email", "")
+                val isNewAccount = json.optBoolean("is_new_account", false)
+                return@withContext PairingPollState.AwaitingTvConfirmation(userName, userEmail, isNewAccount)
+            }
+
+            val isClaimed = json.optBoolean("claimed", false)
+            if (!isClaimed) {
+                return@withContext PairingPollState.Pending
+            }
+
+            // Save negotiated device secret
+            val deviceSecret = json.optString("device_secret", "")
+            if (deviceSecret.isNotEmpty()) {
+                TaloSecurityVault.setDeviceSecret(context, deviceSecret)
+            }
+
+            val userObj = json.optJSONObject("user")
+            val userName = userObj?.optString("name") ?: "Utilisateur Talo"
+            val userEmail = userObj?.optString("email") ?: ""
+            val emailToSave = if (userEmail.isNotEmpty()) userEmail else "$userName@talotv.com"
+            setCloudAccountInfo(context, userName, emailToSave)
+
+            val isNewAccount = json.optBoolean("is_new_account", false)
+            val profilesArray = json.optJSONArray("profiles")
+            val profilesList = parseProfilesArray(profilesArray)
+
+            val hwProfile = json.optJSONObject("device")?.optString("hardware_profile")
+            if (!hwProfile.isNullOrEmpty()) {
+                applyHwProfile(hwProfile)
+            }
+
+            PairingPollState.Claimed(userName, isNewAccount, profilesList)
+        } catch (e: Exception) {
+            Log.w(TAG, "Pairing poll detailed error: ${e.message}")
+            PairingPollState.Error(e.message ?: "Erreur réseau")
+        }
+    }
+
+    /**
+     * Confirms the pairing request from the TV screen
+     */
+    suspend fun confirmPairingFromTv(
+        context: Context,
+        pairingCode: String
+    ): PairingPollState = withContext(Dispatchers.IO) {
+        try {
+            val fingerprint = DeviceFingerprint.getFingerprint(context)
+            val url = URL("$API_BASE/pair.php?action=confirm")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json")
+                doOutput = true
+                connectTimeout = 1500
+                readTimeout = 1500
+            }
+
+            val payload = JSONObject().apply {
+                put("pairingCode", pairingCode)
+                put("deviceFingerprint", fingerprint)
+            }
+
+            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+
+            if (conn.responseCode in 200..299) {
+                val res = conn.inputStream.bufferedReader().use { it.readText() }
+                conn.disconnect()
+                val json = JSONObject(res)
+
+                val deviceSecret = json.optString("device_secret", "")
+                if (deviceSecret.isNotEmpty()) {
+                    TaloSecurityVault.setDeviceSecret(context, deviceSecret)
+                }
+
+                val userObj = json.optJSONObject("user")
+                val userName = userObj?.optString("name") ?: "Utilisateur Talo"
+                val userEmail = userObj?.optString("email") ?: ""
+                setCloudAccountInfo(context, userName, if (userEmail.isNotEmpty()) userEmail else "$userName@talotv.com")
+
+                val isNewAccount = json.optBoolean("is_new_account", false)
+                val profilesArray = json.optJSONArray("profiles")
+                val profilesList = parseProfilesArray(profilesArray)
+
+                PairingPollState.Claimed(userName, isNewAccount, profilesList)
+            } else {
+                conn.disconnect()
+                PairingPollState.Error("Erreur de confirmation (${conn.responseCode})")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Confirm pairing error: ${e.message}")
+            PairingPollState.Error(e.message ?: "Erreur réseau")
         }
     }
 

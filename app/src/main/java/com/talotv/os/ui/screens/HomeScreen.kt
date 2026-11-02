@@ -95,12 +95,18 @@ fun HomeScreen(
     var activeSpotlight by remember {
         mutableStateOf<MediaSpotlight>(dockApps.firstOrNull()?.spotlight ?: ContentRepository.fallbackSpotlight)
     }
+    var activeSuggestion by remember {
+        mutableStateOf<com.talotv.os.core.media.AppHeroSuggestion?>(
+            dockApps.firstOrNull()?.let { com.talotv.os.core.media.ContentSuggestionManager.getSuggestion(context, it) }
+        )
+    }
     var isProfileSwitcherOpen by remember { mutableStateOf(false) }
     var isSidebarOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(dockApps) {
         if (dockApps.isNotEmpty()) {
             activeSpotlight = dockApps.first().spotlight
+            activeSuggestion = com.talotv.os.core.media.ContentSuggestionManager.getSuggestion(context, dockApps.first())
         }
     }
 
@@ -111,6 +117,8 @@ fun HomeScreen(
 
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
 
     // Initial focus on the first dock item to avoid being trapped on profile avatar, scrolled to top
     LaunchedEffect(Unit) {
@@ -175,28 +183,29 @@ fun HomeScreen(
                 .focusProperties { canFocus = !isSettingsOpen }
                 .verticalScroll(scrollState)
         ) {
-            // 1. Top Shelf Showcase (Hero Section with Dynamic Spotlight Backdrop full screen)
+            // 1. Top Shelf Showcase (Hero Section with Dynamic Spotlight Backdrop full screen to bottom)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(490.dp)
+                    .height(screenHeight)
             ) {
                 TopShelfSpotlight(
                     spotlight = activeSpotlight,
+                    suggestion = activeSuggestion,
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // The Signature Talo Floating Glass Dock sitting at bottom of Top Shelf
+                // The Signature Talo Floating Glass Dock sitting at bottom of screen
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 12.dp)
+                        .padding(bottom = 26.dp)
                 ) {
                     // Upward Chevron Indicator right above dock
                     UpwardChevronIndicator()
 
-                    Spacer(modifier = Modifier.height(7.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     FloatingAppDock(
                         apps = dockApps,
@@ -208,6 +217,7 @@ fun HomeScreen(
                         },
                         onAppFocused = { app ->
                             activeSpotlight = app.spotlight
+                            activeSuggestion = com.talotv.os.core.media.ContentSuggestionManager.getSuggestion(context, app)
                             coroutineScope.launch {
                                 scrollState.animateScrollTo(0)
                             }

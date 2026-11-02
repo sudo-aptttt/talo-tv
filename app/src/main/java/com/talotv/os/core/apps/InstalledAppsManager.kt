@@ -183,12 +183,15 @@ class InstalledAppsManager(private val context: Context) {
         for (known in ContentRepository.knownDockApps) {
             val installed = installedMap[known.packageName]
             if (installed != null) {
+                val item = known.copy(
+                    id = installed.id,
+                    name = installed.name,
+                    iconBitmap = installed.iconBitmap,
+                    isBanner = installed.isBanner
+                )
                 result.add(
-                    known.copy(
-                        id = installed.id,
-                        name = installed.name,
-                        iconBitmap = installed.iconBitmap,
-                        isBanner = installed.isBanner
+                    item.copy(
+                        heroSuggestion = com.talotv.os.core.media.ContentSuggestionManager.getSuggestion(context, item)
                     )
                 )
             }
@@ -201,7 +204,12 @@ class InstalledAppsManager(private val context: Context) {
             for (app in currentInstalled) {
                 if (result.size >= 5) break
                 if (app.packageName in usedPackages) continue
-                result.add(app.toDockAppItem())
+                val dockItem = app.toDockAppItem()
+                result.add(
+                    dockItem.copy(
+                        heroSuggestion = com.talotv.os.core.media.ContentSuggestionManager.getSuggestion(context, dockItem)
+                    )
+                )
             }
         }
 
