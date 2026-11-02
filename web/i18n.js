@@ -315,7 +315,20 @@
     sh_started: "{name} : terminé.",
     sh_failed: "L'opération n'a pas pu aboutir.",
     sh_refused: "Commande non autorisée.",
-    sh_hint: "Gauche et Droite pour naviguer, OK pour valider, Retour pour fermer."
+    sh_hint: "Gauche et Droite pour naviguer, OK pour valider, Retour pour fermer.",
+
+    // ---- Ambient Mode & Updates ----
+    ambient_head: "Mode Veille Ambiant",
+    ambient_title: "Écran de veille",
+    ambient_sub: "Estompe les applications pour afficher la scène météo et l'horloge anti-marquage OLED",
+    update_head: "Mises à jour",
+    update_check_title: "Rechercher des mises à jour",
+    update_check_sub: "Vérifier la dernière version officielle sur GitHub",
+    update_current_sub: "Talo TV est à jour",
+    update_available_title: "Mise à jour v{version} disponible !",
+    update_available_sub: "Télécharger et installer la mise à jour (vos données sont conservées)",
+    update_btn_check: "Vérifier",
+    update_btn_install: "Mettre à jour"
   };
 
   S.en = {
@@ -619,7 +632,20 @@
     sh_started: "{name}: done.",
     sh_failed: "That did not work. Home Assistant may be busy, try again.",
     sh_refused: "That is not one of the things this TV may change.",
-    sh_hint: "Left and right move, up and down change rows. OK presses. Back closes."
+    sh_hint: "Left and right move, up and down change rows. OK presses. Back closes.",
+
+    // ---- Ambient Mode & Updates ----
+    ambient_head: "Ambient Screensaver",
+    ambient_title: "Screensaver Timeout",
+    ambient_sub: "Dims applications to showcase dynamic weather scene and OLED burn-in safe clock",
+    update_head: "Updates",
+    update_check_title: "Check for updates",
+    update_check_sub: "Check the latest official release on GitHub",
+    update_current_sub: "Talo TV is up to date",
+    update_available_title: "Update v{version} available!",
+    update_available_sub: "Download and install update (all user data is preserved)",
+    update_btn_check: "Check",
+    update_btn_install: "Update"
   };
 
   var lang = "en";

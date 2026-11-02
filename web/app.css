@@ -855,3 +855,61 @@ body.system-sheet-open > * {
 body.system-sheet-open {
   background: #0A0A0C !important;
 }
+
+/* Ambient Screensaver (OLED-Safe with Scenes & Places) */
+.ambient-clock {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(0, 0);
+  transition: opacity 1.5s ease, transform 3s ease;
+  z-index: 8;
+  text-shadow: 0 0.25rem 1.5rem rgba(0, 0, 0, 0.85);
+}
+
+.ambient-clock .amb-time {
+  font-family: "Antonio", sans-serif;
+  font-weight: 300;
+  font-size: 13vw;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+}
+
+.ambient-clock .amb-date {
+  font-size: 2vw;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.95);
+  margin-top: 1.2vh;
+  text-transform: capitalize;
+}
+
+.ambient-clock .amb-wx {
+  font-size: 1.7vw;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 0.8vh;
+}
+
+body.ambient-mode .top,
+body.ambient-mode .home,
+body.ambient-mode .scrim {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 1.5s ease;
+}
+
+body.ambient-mode .ambient-clock {
+  opacity: 1;
+}
+
+body.ambient-mode .scenes {
+  opacity: 1 !important;
+  filter: brightness(0.95);
+  transition: filter 1.5s ease;
+}

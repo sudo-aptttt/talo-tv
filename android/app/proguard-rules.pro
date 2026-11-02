@@ -9,6 +9,7 @@
 -keep class com.talotv.launcher.MainActivity { *; }
 -keep class com.talotv.launcher.TaloVpnService { *; }
 -keep class com.talotv.launcher.TaloAccessibilityService { *; }
+-keep class com.talotv.launcher.TaloFileProvider { *; }
 -keep class com.talotv.launcher.HomeAssistant { *; }
 -keep class com.talotv.launcher.Doorbell { *; }
 

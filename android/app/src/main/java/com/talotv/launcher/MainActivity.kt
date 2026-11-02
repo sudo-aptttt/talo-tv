@@ -283,6 +283,7 @@ class MainActivity : Activity() {
         if (pageReady) {
             js("window.tv && tv.resume && tv.resume()")
         }
+        checkPeriodicUpdate()
         if (offline || fallback != null) connect()
         if (appCache == null) {
             io.execute { warmApps() }
@@ -293,6 +294,9 @@ class MainActivity : Activity() {
         super.onPause()
         resumed = false
         if (introPlaying) dismissIntro()
+        if (pageReady) {
+            js("window.tv && tv.pause && tv.pause()")
+        }
     }
 
     override fun onDestroy() {
@@ -1330,6 +1334,53 @@ class MainActivity : Activity() {
         }
 
         @JavascriptInterface
+        fun isMediaPlaying(): Boolean {
+            return try {
+                val am = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                am?.isMusicActive == true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        @JavascriptInterface
+        fun getUpdateStatus(): String {
+            val sp = getSharedPreferences("page", MODE_PRIVATE)
+            val json = sp.getString("talo_update_cache", null)
+            if (json != null) return json
+            return JSONObject().apply {
+                put("checked", false)
+                put("updateAvailable", false)
+                put("currentVersion", BuildConfig.VERSION_NAME)
+            }.toString()
+        }
+
+        @JavascriptInterface
+        fun checkForUpdates(manual: Boolean): String {
+            if (manual) {
+                main.post {
+                    Toast.makeText(this@MainActivity, "Recherche de mise à jour Talo TV...", Toast.LENGTH_SHORT).show()
+                }
+            }
+            io.execute {
+                performUpdateCheck(manual)
+            }
+            return getUpdateStatus()
+        }
+
+        @JavascriptInterface
+        fun downloadAndInstallUpdate(downloadUrl: String): Boolean {
+            val url = downloadUrl.ifBlank { "https://github.com/sudo-aptttt/talo-tv/releases/latest/download/talo-tv.apk" }
+            main.post {
+                Toast.makeText(this@MainActivity, "Téléchargement de la mise à jour Talo TV...", Toast.LENGTH_LONG).show()
+            }
+            io.execute {
+                performDownloadAndInstall(url)
+            }
+            return true
+        }
+
+        @JavascriptInterface
         fun removePhoto(name: String) {
             photoFile(name)?.delete()
         }
@@ -1354,6 +1405,176 @@ class MainActivity : Activity() {
     private fun photoFile(name: String): java.io.File? {
         if (!Regex("[A-Za-z0-9_-]{1,64}\\.jpg").matches(name)) return null
         return java.io.File(photoDir, name).takeIf { it.isFile }
+    }
+
+    private fun isNewerVersion(remote: String, current: String): Boolean {
+        try {
+            val cleanRemote = remote.trim().removePrefix("v").removePrefix("V")
+            val cleanCurrent = current.trim().removePrefix("v").removePrefix("V")
+            val rParts = cleanRemote.split(".").map { it.toIntOrNull() ?: 0 }
+            val cParts = cleanCurrent.split(".").map { it.toIntOrNull() ?: 0 }
+            val maxLen = maxOf(rParts.size, cParts.size)
+            for (i in 0 until maxLen) {
+                val r = rParts.getOrElse(i) { 0 }
+                val c = cParts.getOrElse(i) { 0 }
+                if (r > c) return true
+                if (r < c) return false
+            }
+            return false
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    private fun checkPeriodicUpdate() {
+        val sp = getSharedPreferences("page", MODE_PRIVATE)
+        val lastCheck = sp.getLong("talo_last_update_check", 0L)
+        val now = System.currentTimeMillis()
+        if (now - lastCheck > 12 * 3600 * 1000L) {
+            sp.edit().putLong("talo_last_update_check", now).apply()
+            main.postDelayed({
+                io.execute { performUpdateCheck(manual = false) }
+            }, 12000L)
+        }
+    }
+
+    private fun performUpdateCheck(manual: Boolean) {
+        try {
+            val conn = (URL("https://api.github.com/repos/sudo-aptttt/talo-tv/releases/latest").openConnection() as HttpURLConnection).apply {
+                connectTimeout = 8000
+                readTimeout = 8000
+                setRequestProperty("User-Agent", "TaloTV-Launcher/${BuildConfig.VERSION_NAME}")
+                setRequestProperty("Accept", "application/vnd.github.v3+json")
+            }
+            val status = conn.responseCode
+            if (status == 200) {
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                val obj = JSONObject(text)
+                val tagName = obj.optString("tag_name", "").removePrefix("v")
+                val releaseName = obj.optString("name", "v$tagName")
+                val notes = obj.optString("body", "")
+
+                var assetUrl = "https://github.com/sudo-aptttt/talo-tv/releases/latest/download/talo-tv.apk"
+                val assets = obj.optJSONArray("assets")
+                if (assets != null) {
+                    for (i in 0 until assets.length()) {
+                        val a = assets.getJSONObject(i)
+                        val name = a.optString("name", "")
+                        if (name.equals("talo-tv.apk", ignoreCase = true) || name.endsWith(".apk")) {
+                            assetUrl = a.optString("browser_download_url", assetUrl)
+                            break
+                        }
+                    }
+                }
+
+                val hasUpdate = isNewerVersion(tagName, BuildConfig.VERSION_NAME)
+                val resObj = JSONObject().apply {
+                    put("checked", true)
+                    put("updateAvailable", hasUpdate)
+                    put("currentVersion", BuildConfig.VERSION_NAME)
+                    put("latestVersion", tagName)
+                    put("name", releaseName)
+                    put("notes", notes)
+                    put("downloadUrl", assetUrl)
+                    put("lastCheck", System.currentTimeMillis())
+                }
+
+                getSharedPreferences("page", MODE_PRIVATE).edit()
+                    .putString("talo_update_cache", resObj.toString())
+                    .apply()
+
+                main.post {
+                    js("window.tv && tv.onUpdateStatus && tv.onUpdateStatus(" + JSONObject.quote(resObj.toString()) + ")")
+                    if (manual) {
+                        if (hasUpdate) {
+                            Toast.makeText(this@MainActivity, "Mise à jour v$tagName disponible !", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(this@MainActivity, "Talo TV est à jour (v${BuildConfig.VERSION_NAME})", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            } else if (manual) {
+                main.post {
+                    Toast.makeText(this@MainActivity, "Vérification impossible ($status)", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "performUpdateCheck failed", e)
+            if (manual) {
+                main.post {
+                    Toast.makeText(this@MainActivity, "Impossible de vérifier les mises à jour", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun performDownloadAndInstall(urlStr: String) {
+        val destFile = java.io.File(cacheDir, "talo-tv-update.apk")
+        try {
+            var targetUrl = urlStr
+            var redirects = 0
+            var conn: HttpURLConnection
+            while (true) {
+                conn = (URL(targetUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                    instanceFollowRedirects = false
+                    setRequestProperty("User-Agent", "TaloTV-Launcher/${BuildConfig.VERSION_NAME}")
+                }
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val loc = conn.getHeaderField("Location") ?: break
+                    targetUrl = loc
+                    redirects++
+                    if (redirects > 5) break
+                } else break
+            }
+
+            if (conn.responseCode != 200) {
+                throw java.io.IOException("HTTP error ${conn.responseCode}")
+            }
+
+            destFile.delete()
+            conn.inputStream.use { input ->
+                java.io.FileOutputStream(destFile).use { output ->
+                    val buf = ByteArray(65536)
+                    var read: Int
+                    while (input.read(buf).also { read = it } != -1) {
+                        output.write(buf, 0, read)
+                    }
+                    output.flush()
+                }
+            }
+
+            if (!destFile.exists() || destFile.length() < 100_000L) {
+                throw java.io.IOException("Fichier téléchargé incomplet")
+            }
+
+            main.post {
+                Toast.makeText(this@MainActivity, "Téléchargement terminé, installation...", Toast.LENGTH_LONG).show()
+                launchApkInstallation(destFile)
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Download update failed", e)
+            destFile.delete()
+            main.post {
+                Toast.makeText(this@MainActivity, "Échec du téléchargement : ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun launchApkInstallation(file: java.io.File) {
+        try {
+            val uri = Uri.parse("content://${packageName}.fileprovider/${file.name}")
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "launchApkInstallation failed", e)
+            Toast.makeText(this@MainActivity, "Erreur d'installation : ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     // The framework's own result callback (this app has no AndroidX, so no result API).

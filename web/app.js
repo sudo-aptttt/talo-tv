@@ -34,6 +34,23 @@
   // config.js. ST is the saved object; the rest are read from it in readConfig().
   var ST = {}, WX_SHOW = true, WX_F = false, WX_EVERY = 30, HIDDEN_TV = [];
 
+  // Ambient Mode & Updates
+  var ambientActive = false;
+  var ambientTimer = null;
+  var ambientBurnInTimer = null;
+  var ambientShiftIdx = 0;
+  var ambientShifts = [
+    "translate(0, 0)",
+    "translate(-12vw, -8vh)",
+    "translate(12vw, -6vh)",
+    "translate(-10vw, 8vh)",
+    "translate(11vw, 9vh)",
+    "translate(0, -9vh)",
+    "translate(-8vw, 0)",
+    "translate(8vw, 4vh)"
+  ];
+  var updateStatus = { state: "idle" };
+
   // What this TV keeps for itself (app order, people order, new apps, the look). Written to the
   // page's storage and to the launcher (TVOS.keep), so the live page and the saved copy share it.
   var PFX = MOCK || PREVIEW ? "mock:" : "";
@@ -2398,6 +2415,31 @@
       }
     });
 
+    rows.push(head(t("ambient_head")));
+    var ambTimeout = ST.ambient_timeout !== undefined ? ST.ambient_timeout : 10;
+    var ambLabels = {
+      0: t("off"),
+      5: "5 min",
+      10: "10 min",
+      15: "15 min"
+    };
+    rows.push({
+      kind: "cycle",
+      key: "ambient_timeout",
+      label: t("ambient_title"),
+      sub: t("ambient_sub"),
+      value: ambLabels[ambTimeout] || (ambTimeout ? ambTimeout + " min" : t("off")),
+      act: function () {
+        var cycle = [10, 15, 0, 5];
+        var idx = cycle.indexOf(ambTimeout);
+        var next = cycle[(idx + 1) % cycle.length];
+        ST.ambient_timeout = next;
+        saveSettings();
+        resetAmbientTimer();
+        renderSettings();
+      }
+    });
+
     rows.push(head(t("startup_head")));
     var introQ = ST.intro_quality || "fast";
     var introLabels = {
@@ -2420,6 +2462,102 @@
       }
     });
     return rows;
+  }
+
+  // ---- Ambient Screensaver (OLED-Safe with Scenes & Places) ----
+  function updateAmbientClock() {
+    var timeEl = $("amb-time");
+    var dateEl = $("amb-date");
+    var wxEl = $("amb-wx");
+    if (!timeEl || !dateEl) return;
+    var d = new Date(), h = d.getHours(), m = d.getMinutes();
+    var mm = (m < 10 ? "0" : "") + m;
+    var hm = CLOCK24 ? (h < 10 ? "0" : "") + h + ":" + mm : (h % 12 || 12) + ":" + mm + " " + (h < 12 ? t("am") : t("pm"));
+    timeEl.textContent = hm;
+
+    var loc = window.I18N ? window.I18N.locale() : "fr-FR";
+    var day = d.toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long" }).replace(",", "");
+    day = day.charAt(0).toUpperCase() + day.slice(1);
+    dateEl.textContent = day;
+
+    if (wxEl) {
+      var w = WX_SHOW && data.weather && data.weather.temp != null ? data.weather : null;
+      if (w) {
+        var place = (ST && ST.place_name) || (data && data.location && data.location.city) || "";
+        var wt = wxText(w);
+        wxEl.textContent = (place ? place + " · " : "") + tempText(w.temp) + (wt ? " · " + wt : "");
+      } else {
+        wxEl.textContent = "";
+      }
+    }
+  }
+
+  function shiftAmbientClock() {
+    var clockEl = $("ambient-clock");
+    if (!clockEl) return;
+    ambientShiftIdx = (ambientShiftIdx + 1) % ambientShifts.length;
+    clockEl.style.transform = ambientShifts[ambientShiftIdx];
+  }
+
+  function isVideoPlaying() {
+    try {
+      if (TV && TV.isMediaPlaying && TV.isMediaPlaying()) return true;
+    } catch (e) {}
+    try {
+      var videos = document.querySelectorAll("video");
+      for (var i = 0; i < videos.length; i++) {
+        var v = videos[i];
+        if (!v.paused && !v.ended && v.readyState > 2) return true;
+      }
+    } catch (e) {}
+    var playerModal = $("player-modal");
+    if (playerModal && playerModal.classList.contains("on")) return true;
+    var camOverlay = $("cam-overlay");
+    if (camOverlay && camOverlay.classList.contains("on")) return true;
+    return false;
+  }
+
+  function enterAmbient() {
+    if (ambientActive) return;
+    if (isVideoPlaying()) {
+      resetAmbientTimer();
+      return;
+    }
+    ambientActive = true;
+    ambientShiftIdx = 0;
+    var clockEl = $("ambient-clock");
+    if (clockEl) {
+      clockEl.style.transform = ambientShifts[0];
+    }
+    updateAmbientClock();
+    document.body.classList.add("ambient-mode");
+    clearInterval(ambientBurnInTimer);
+    ambientBurnInTimer = setInterval(function () {
+      updateAmbientClock();
+      shiftAmbientClock();
+    }, 60000);
+  }
+
+  function exitAmbient() {
+    if (!ambientActive) return;
+    ambientActive = false;
+    document.body.classList.remove("ambient-mode");
+    clearInterval(ambientBurnInTimer);
+    ambientBurnInTimer = null;
+    resetAmbientTimer();
+  }
+
+  function resetAmbientTimer() {
+    clearTimeout(ambientTimer);
+    var timeoutMin = ST.ambient_timeout !== undefined ? ST.ambient_timeout : 10;
+    if (timeoutMin <= 0) return;
+    ambientTimer = setTimeout(function () {
+      if (isVideoPlaying()) {
+        resetAmbientTimer();
+      } else {
+        enterAmbient();
+      }
+    }, timeoutMin * 60 * 1000);
   }
 
   // ---- apps: the same order as holding OK on the dock, plus hiding ----
@@ -2658,14 +2796,74 @@
     var ver = "";
     try { ver = TV && TV.version ? TV.version() : ""; } catch (e) {}
     var run = ALONE ? "run_alone" : OFFLINE ? "run_off" : data.bridge === false ? "run_quiet" : "run_bridge";
-    return [
+    var rows = [
       info("ver", t("about_version"), ver || t("about_web")),
       info("code", t("about_code"), REPO_URL),
       info("run", t("about_running"), t(run)),
-      info("kept", t("about_kept"), t(OFFLINE || data.bridge === false ? "kept_tv" : "kept_both")),
-      { kind: "action", key: "reset", label: t("about_reset"), sub: t("about_reset_sub"),
-        act: resetSettings }
+      info("kept", t("about_kept"), t(OFFLINE || data.bridge === false ? "kept_tv" : "kept_both"))
     ];
+
+    rows.push(head(t("update_head")));
+    var upd = updateStatus || { state: "idle" };
+    try {
+      if (TV && TV.getUpdateStatus && upd.state === "idle") {
+        var raw = TV.getUpdateStatus();
+        if (raw) upd = JSON.parse(raw);
+      }
+    } catch (e) {}
+
+    var updLabel = t("update_check_title");
+    var updSub = t("update_check_sub");
+    var updBtn = t("update_btn_check");
+
+    if (upd.state === "checking") {
+      updSub = t("update_check_title") + "...";
+      updBtn = "...";
+    } else if (upd.state === "available") {
+      updLabel = t("update_available_title", { version: upd.version || "" });
+      updSub = t("update_available_sub");
+      updBtn = t("update_btn_install");
+    } else if (upd.state === "downloading") {
+      updLabel = t("update_btn_install");
+      updSub = (upd.progress || 0) + "%";
+      updBtn = (upd.progress || 0) + "%";
+    } else if (upd.state === "up-to-date") {
+      updSub = t("update_current_sub");
+    } else if (upd.state === "error") {
+      updSub = upd.message || "Erreur";
+    }
+
+    rows.push({
+      kind: "action",
+      key: "update",
+      label: updLabel,
+      sub: updSub,
+      value: updBtn,
+      act: function () {
+        if (upd.state === "available" && upd.url) {
+          if (TV && TV.downloadAndInstallUpdate) {
+            TV.downloadAndInstallUpdate(upd.url);
+          }
+        } else {
+          if (TV && TV.checkForUpdates) {
+            TV.checkForUpdates(true);
+          } else {
+            SET.msg = t("update_current_sub");
+            renderSettings();
+          }
+        }
+      }
+    });
+
+    rows.push(head(""));
+    rows.push({
+      kind: "action",
+      key: "reset",
+      label: t("about_reset"),
+      sub: t("about_reset_sub"),
+      act: resetSettings
+    });
+    return rows;
   }
   // Complete reset of Talo TV: clears all storage, local order, people, and restores factory defaults.
   function resetSettings() {
@@ -3065,6 +3263,13 @@
   var okDown = false, okHeld = false, okTimer = null;
   function okReset() { okDown = false; okHeld = false; clearTimeout(okTimer); }
   document.addEventListener("keydown", function (e) {
+    if (ambientActive) {
+      exitAmbient();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    resetAmbientTimer();
     if (typingKey(e)) return;   // typing a place or a name: the keys belong to the text box
     if (isOk(e)) {
       e.preventDefault();
@@ -3091,6 +3296,14 @@
     ensureFocus();
   });
   window.addEventListener("blur", okReset);
+  document.addEventListener("mousemove", function () {
+    if (ambientActive) exitAmbient();
+    resetAmbientTimer();
+  });
+  document.addEventListener("pointerdown", function () {
+    if (ambientActive) exitAmbient();
+    resetAmbientTimer();
+  });
 
   // ---------------- data ----------------
   function nativeApps() {
@@ -3245,14 +3458,29 @@
     openWatchlist: openWatchlist,
     openLive: openLiveChannels,
     openSettings: openSettings,
+    pause: function () {
+      clearTimeout(ambientTimer);
+      exitAmbient();
+    },
     resume: function () {
       document.body.classList.remove("system-sheet-open");
+      exitAmbient();
+      resetAmbientTimer();
       invalidateSettingsCache();
       if (zone === "settings") renderSettings();
       okReset();
       refresh();
       if (!OFFLINE) refreshQuick();
       refreshWeather();
+    },
+    onUpdateStatus: function (statusJson) {
+      try {
+        var data = typeof statusJson === "string" ? JSON.parse(statusJson) : statusJson;
+        updateStatus = data;
+        if (zone === "settings" && SET.section === "about") {
+          renderSettings();
+        }
+      } catch (e) {}
     },
     renderSettings: function () {
       invalidateSettingsCache();
@@ -3274,6 +3502,7 @@
     readConfig();
     staticText();
     initSettings();
+    resetAmbientTimer();
     mark("app-start");
     clock();
     setInterval(clock, 15000);
