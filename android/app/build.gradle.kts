@@ -13,8 +13,8 @@ android {
         applicationId = "com.talotv.launcher"
         minSdk = 28
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         val urls = (project.findProperty("bridgeUrls") as String? ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
         buildConfigField("String[]", "BRIDGES", "{" + urls.joinToString(", ") { "\"" + it + "\"" } + "}")
     }
