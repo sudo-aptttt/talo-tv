@@ -40,14 +40,16 @@
   var ambientBurnInTimer = null;
   var ambientShiftIdx = 0;
   var ambientShifts = [
-    "translate(0, 0)",
-    "translate(-12vw, -8vh)",
-    "translate(12vw, -6vh)",
-    "translate(-10vw, 8vh)",
-    "translate(11vw, 9vh)",
-    "translate(0, -9vh)",
-    "translate(-8vw, 0)",
-    "translate(8vw, 4vh)"
+    "translate(-22vw, -16vh)",
+    "translate(22vw, 15vh)",
+    "translate(0vw, -18vh)",
+    "translate(-24vw, 4vh)",
+    "translate(24vw, -14vh)",
+    "translate(0vw, 16vh)",
+    "translate(-20vw, 15vh)",
+    "translate(22vw, -4vh)",
+    "translate(-12vw, -10vh)",
+    "translate(14vw, 8vh)"
   ];
   var updateStatus = { state: "idle" };
 
@@ -2524,10 +2526,10 @@
       return;
     }
     ambientActive = true;
-    ambientShiftIdx = 0;
+    ambientShiftIdx = Math.floor(Math.random() * ambientShifts.length);
     var clockEl = $("ambient-clock");
     if (clockEl) {
-      clockEl.style.transform = ambientShifts[0];
+      clockEl.style.transform = ambientShifts[ambientShiftIdx];
     }
     updateAmbientClock();
     document.body.classList.add("ambient-mode");
@@ -2535,7 +2537,7 @@
     ambientBurnInTimer = setInterval(function () {
       updateAmbientClock();
       shiftAmbientClock();
-    }, 60000);
+    }, 28000);
   }
 
   function exitAmbient() {

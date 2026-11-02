@@ -857,6 +857,24 @@ body.system-sheet-open {
 }
 
 /* Ambient Screensaver (OLED-Safe with Scenes & Places) */
+@keyframes ambient-scene-drift {
+  0% {
+    transform: scale(1.10) translate(0%, 0%);
+  }
+  25% {
+    transform: scale(1.14) translate(-2.5%, -1.8%);
+  }
+  50% {
+    transform: scale(1.12) translate(2.2%, -2.2%);
+  }
+  75% {
+    transform: scale(1.15) translate(-1.8%, 2.2%);
+  }
+  100% {
+    transform: scale(1.10) translate(0%, 0%);
+  }
+}
+
 .ambient-clock {
   position: fixed;
   inset: 0;
@@ -867,9 +885,9 @@ body.system-sheet-open {
   pointer-events: none;
   opacity: 0;
   transform: translate(0, 0);
-  transition: opacity 1.5s ease, transform 3s ease;
-  z-index: 8;
-  text-shadow: 0 0.25rem 1.5rem rgba(0, 0, 0, 0.85);
+  transition: opacity 1.5s ease, transform 4.5s cubic-bezier(0.25, 1, 0.5, 1);
+  z-index: 10;
+  text-shadow: 0 0.35rem 2.2rem rgba(0, 0, 0, 0.95);
 }
 
 .ambient-clock .amb-time {
@@ -878,13 +896,13 @@ body.system-sheet-open {
   font-size: 13vw;
   line-height: 1;
   letter-spacing: -0.02em;
-  color: #ffffff;
+  color: rgba(255, 255, 255, 0.90);
 }
 
 .ambient-clock .amb-date {
   font-size: 2vw;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.95);
+  color: rgba(255, 255, 255, 0.84);
   margin-top: 1.2vh;
   text-transform: capitalize;
 }
@@ -892,24 +910,40 @@ body.system-sheet-open {
 .ambient-clock .amb-wx {
   font-size: 1.7vw;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.72);
   margin-top: 0.8vh;
 }
 
+/* Hide all background scene clocks, headers, dock, and overlays in ambient mode */
 body.ambient-mode .top,
 body.ambient-mode .home,
-body.ambient-mode .scrim {
+body.ambient-mode .scrim,
+body.ambient-mode .gclock,
+body.ambient-mode .date,
+body.ambient-mode .people,
+body.ambient-mode .people-wrap,
+body.ambient-mode .quick,
+body.ambient-mode .qbtns,
+body.ambient-mode .gear-backdrop,
+body.ambient-mode .gear-pop {
   opacity: 0 !important;
+  visibility: hidden !important;
   pointer-events: none !important;
-  transition: opacity 1.5s ease;
+  transition: opacity 1.5s ease, visibility 1.5s ease;
 }
 
 body.ambient-mode .ambient-clock {
   opacity: 1;
 }
 
+/* Darken scene for OLED power saving and apply subtle Ken Burns drift */
 body.ambient-mode .scenes {
   opacity: 1 !important;
-  filter: brightness(0.95);
-  transition: filter 1.5s ease;
+  filter: brightness(0.38) contrast(1.05);
+  transition: filter 2s ease;
+}
+
+body.ambient-mode .scene .sbg {
+  animation: ambient-scene-drift 80s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+  will-change: transform;
 }
