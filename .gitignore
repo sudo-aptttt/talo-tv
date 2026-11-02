@@ -7,18 +7,20 @@
 # Gradle files
 .gradle/
 build/
-app/build/
+*/build/
 
-# Android Studio & IntelliJ IDEA files
+# Android Studio & IntelliJ IDEA
 .idea/
 *.iml
 .navigation/
 captures/
 *.hprof
+.kotlin/
 
 # Local configuration
 local.properties
-.kotlin/
+.env
+.env.local
 
 # OS generated files
 .DS_Store

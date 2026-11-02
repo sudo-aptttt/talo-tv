@@ -1,0 +1,857 @@
+/* TV home, tvOS style. Designed at 1920x1080; 1rem = 16px at that width, so it scales with the
+   TV's real CSS viewport (this TV's WebView reports 960x540 at 2x).
+   Apple's tvOS numbers: safe area 60 top and bottom, 80 at the sides; 40 between tiles;
+   text 29 by default and never under 23. */
+
+@font-face {
+  font-family: "Inter"; font-weight: 100 900; font-display: block;
+  src: url(fonts/inter-latin-wght-normal.woff2) format("woff2");
+}
+
+:root {
+  --bg: #0b0b0e;
+  --bg-2: #060608;
+  --text: #f5f5f7;
+  --text-2: rgba(245, 245, 247, 0.62);
+  --text-3: rgba(245, 245, 247, 0.42);
+  --tile: #1c1c21;
+  --warn: #ff9f8a;
+
+  --safe-x: 5rem;        /* 80 */
+  --safe-y: 3.75rem;     /* 60 */
+  --gap: 2.5rem;         /* 40 */
+
+  --shelf-w: 20rem;      /* 320: Apple's five-column width */
+  --shelf-h: 11.25rem;   /* 16:9 */
+  --app-w: 11.5rem;      /* 184: Apple's eight-column width */
+  --app-h: 6.5rem;       /* 16:9, the shape of an Android TV banner */
+  --app-row-gap: 3.5rem;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+* { box-sizing: border-box; margin: 0; }
+html { font-size: calc(100vw / 120); background: var(--bg); color: var(--text); }
+body {
+  width: 100vw; height: 100vh; overflow: hidden;
+  background: var(--bg);
+  font-family: "Inter", system-ui, sans-serif; font-weight: 450;
+  -webkit-font-smoothing: antialiased; letter-spacing: -0.005em;
+  cursor: none; user-select: none; -webkit-user-select: none;
+}
+
+/* ---------- the photo: full screen, drifting slowly, one place at a time ---------- */
+.bg { position: fixed; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; background: var(--bg); }
+.bg img {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
+  opacity: 0; transition: opacity 1600ms ease-in-out;
+}
+.bg img.on { opacity: 1; transform: scale(1.02) translateZ(0); will-change: opacity; }
+.bg img.show { animation: none; }
+.night .bg img { filter: brightness(0.72); }
+/* darker at the top for the clock, much darker at the bottom for the apps */
+.scrim {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 26%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 32%, rgba(0, 0, 0, 0.5) 55%, rgba(0, 0, 0, 0.86) 100%);
+}
+
+/* ---------- clock, and the focused show's title ---------- */
+.top {
+  position: fixed; top: var(--safe-y); left: var(--safe-x); right: var(--safe-x); z-index: 2;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  text-shadow: 0 0.125rem 1.5rem rgba(0, 0, 0, 0.35);
+}
+.clock { text-align: right; }
+.time { font-size: 7rem; line-height: 7rem; font-weight: 250; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.time small { font-size: 2.25rem; font-weight: 400; letter-spacing: 0; margin-left: 0.5rem; }
+.date { margin-top: 0.75rem; font-size: 1.875rem; line-height: 2.25rem; font-weight: 550; }
+.place { margin-top: 0.625rem; font-size: 1.4375rem; line-height: 1.875rem; color: rgba(255, 255, 255, 0.66); }
+/* quick buttons under the clock, like Apple TV's Control Centre */
+.quick { position: relative; display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.25rem; text-shadow: none; }
+.qbtns { display: flex; gap: 0.75rem; justify-content: flex-end; }
+.quick.none { display: none; }
+.qbtn {
+  display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 1.25rem 0.5rem 1rem; border-radius: 2rem;
+  font-size: 1.4375rem; line-height: 2rem; font-weight: 600; color: #fff;
+  background: rgba(22, 22, 28, 0.85);
+  transition: background 200ms var(--ease), color 200ms var(--ease), transform 200ms var(--ease);
+}
+.qbtn svg { width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.qbtn svg .fill { fill: currentColor; stroke: none; }
+.qbtn.set { background: rgba(16, 16, 20, 0.66); box-shadow: inset 0 0 0 0.125rem rgba(255, 255, 255, 0.5); }
+.qbtn.off { color: rgba(255, 255, 255, 0.55); }
+.qbtn.focus { background: #fff; color: #111; transform: scale(1.08); box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.35); }
+.sleep-menu {
+  display: none; position: absolute; right: 0; top: calc(100% + 0.75rem); gap: 0.5rem; padding: 0.5rem;
+  border-radius: 2rem; background: rgba(28, 28, 34, 0.95);
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.5); text-shadow: none;
+}
+.sleep-menu.on { display: flex; }
+.sleep-menu .opt { white-space: nowrap; padding: 0 1.25rem; border-radius: 1.5rem; font-size: 1.4375rem; line-height: 2.75rem; font-weight: 600; color: rgba(255, 255, 255, 0.85); transition: transform 200ms var(--ease); }
+.sleep-menu .opt.focus { background: #fff; color: #111; transform: scale(1.08); }
+.quick-note { margin-top: 0.5rem; font-size: 1.4375rem; color: var(--warn); min-height: 1.875rem; }
+
+.hero { max-width: 62rem; opacity: 0; transform: translateY(0.5rem); transition: opacity 400ms var(--ease), transform 400ms var(--ease); }
+.hero.on { opacity: 1; transform: none; }
+.hero h1 { font-size: 3.75rem; line-height: 4.25rem; font-weight: 700; letter-spacing: -0.025em; }
+.hero p { margin-top: 0.75rem; font-size: 1.8125rem; line-height: 2.25rem; color: rgba(255, 255, 255, 0.8); }
+
+.home { position: relative; z-index: 1; height: 100vh; }
+
+/* ---------- Keep watching ---------- */
+.shelf-head { display: flex; align-items: baseline; justify-content: space-between; height: 2.25rem; margin-bottom: 1.25rem; }
+.shelf-head h2 { font-size: 1.875rem; line-height: 2.25rem; font-weight: 620; color: rgba(255, 255, 255, 0.82); letter-spacing: -0.01em; text-shadow: 0 0.125rem 1rem rgba(0, 0, 0, 0.4); }
+.status { font-size: 1.4375rem; color: var(--warn); }
+/* whose shows: one tab per person, like Apple TV's tab bar */
+.shelf-head { justify-content: flex-start; gap: 1.5rem; align-items: center; height: 3rem; }
+/* top left, the show title sits under it */
+.top-left { display: flex; flex-direction: column; align-items: flex-start; gap: 1.5rem; }
+.people.empty, .people.none { display: none; }
+.people { display: flex; width: max-content; text-shadow: none; gap: 0.5rem; padding: 0.375rem; border-radius: 2rem; background: rgba(255, 255, 255, 0.12); }
+.person {
+  font-size: 1.4375rem; line-height: 2.25rem; font-weight: 600; padding: 0 1.25rem; border-radius: 1.5rem;
+  color: rgba(255, 255, 255, 0.78); transition: background 200ms var(--ease), color 200ms var(--ease), transform 200ms var(--ease);
+}
+.person.on { background: #fff; color: #111; }
+.person.focus { transform: scale(1.08); box-shadow: 0 0 0 0.1875rem #fff, 0 0.5rem 1.25rem rgba(0, 0, 0, 0.35); }
+.person.focus:not(.on) { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.shelf-none { font-size: 1.8125rem; line-height: var(--shelf-h); color: rgba(255, 255, 255, 0.7); text-shadow: 0 0.125rem 1rem rgba(0, 0, 0, 0.4); }
+.shelf-head .status { margin-left: auto; padding-right: var(--safe-x); }
+
+.shelf { position: absolute; left: var(--safe-x); right: 0; top: 19.25rem; }
+.shelf.empty { display: none; }
+.shelf-head { padding-right: var(--safe-x); }
+.shelf-track { display: flex; gap: var(--gap); transition: transform 280ms var(--ease); }
+.shelf-empty {
+  max-width: 44rem; padding-top: 0.5rem;
+  font-size: 1.8125rem; line-height: 2.5rem; color: var(--text-3); font-weight: 450;
+}
+
+/* ---------- tiles and the tvOS focus effect ---------- */
+.tile {
+  position: relative; flex: none;
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+  transform: translateZ(0); will-change: transform;
+}
+.face {
+  position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--tile);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.35);
+  transition: box-shadow 160ms cubic-bezier(0.2, 0, 0, 1);
+  transform: translateZ(0);
+}
+.face img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tile.focus { z-index: 2; transform: scale(1.08) translateZ(0); }
+.tile.focus .face {
+  box-shadow: 0 1.25rem 2.5rem rgba(0, 0, 0, 0.65), 0 0 0 0.125rem rgba(255, 255, 255, 0.45);
+}
+
+/* Keep watching tile */
+.show { width: var(--shelf-w); height: var(--shelf-h); }
+.show .face { border-radius: 0.875rem; }
+.show.focus { transform: scale(1.07); }
+.show .badge {
+  position: absolute; left: 1rem; bottom: 1.25rem; width: 3rem; height: 3rem; border-radius: 0.75rem;
+  overflow: hidden; box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.45);
+}
+.show .badge img { width: 100%; height: 100%; object-fit: cover; }
+.show .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 0.375rem; background: rgba(0, 0, 0, 0.45); }
+.show .bar i { display: block; height: 100%; background: var(--text); }
+.show .no-art {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+  font-size: 2.25rem; font-weight: 650; text-align: center; color: var(--text-2);
+}
+.caption {
+  position: absolute; left: 0; right: 0; top: calc(100% + 1.25rem); opacity: 0;
+  transition: opacity 200ms var(--ease); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* the focused show's title is shown large at the top instead */
+.show .caption { display: none; }
+.caption b { display: block; font-size: 1.8125rem; line-height: 2.25rem; font-weight: 620; color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+.caption span { display: block; font-size: 1.4375rem; line-height: 1.875rem; color: var(--text-2); }
+
+/* ---------- apps ---------- */
+.apps { position: absolute; left: var(--safe-x); right: var(--safe-x); top: 37.5rem; }
+.grid {
+  display: grid; grid-template-columns: repeat(8, var(--app-w)); grid-auto-rows: var(--app-h);
+  column-gap: var(--gap); row-gap: var(--app-row-gap);
+}
+.app { width: var(--app-w); height: var(--app-h); }
+.app .face { border-radius: 0.625rem; }
+.app.focus { transform: scale(1.16); }
+.app .label {
+  position: absolute; left: -2rem; right: -2rem; top: calc(100% + 0.625rem); text-align: center;
+  font-size: 1.25rem; line-height: 1.5rem; font-weight: 600; color: var(--text); opacity: 0;
+  transition: opacity 200ms var(--ease); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.app.focus .label { opacity: 1; }
+/* apps without a TV banner: their icon on a soft tile */
+.app .face.icon { display: flex; align-items: center; justify-content: center; }
+.app .face.icon img { width: 3.75rem; height: 3.75rem; border-radius: 0.875rem; object-fit: cover; }
+.app .face.word { display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 650; color: #fff; padding: 0 1rem; text-align: center; }
+/* the house's own tiles: computer screen, settings */
+.app .face.tool {
+  background: linear-gradient(160deg, #2c2c33 0%, #1a1a1f 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+.app .face.tool svg { width: 2.75rem; height: 2.75rem; stroke: var(--text); stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.app.busy .face { animation: none; opacity: 0.6; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tile.focus .face, .tile.focus .face::after { animation: none; }
+  .tile, .shelf-track, .bg img, .hero { transition: none; }
+  .bg img.on { animation: none; }
+}
+
+/* ================= Night: the living room's lock screen look =================
+   Only applies with html.theme-night. 
+   Layers: photo, glass clock, the peak cut out of the photo, scrim, then everything else. */
+@font-face {
+  font-family: "Antonio"; font-weight: 300; font-display: block;
+  src: url(fonts/antonio-latin-300.woff2) format("woff2");
+}
+/* Five scenes take turns every 20 s. Each scene is its own photo, glass
+   clock and cut-out; only the one showing and the one coming next are drawn (.ready), to save memory. */
+.scenes { display: none; }
+.theme-night .scenes {
+  display: block;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+  transition: opacity 280ms cubic-bezier(0.2, 0, 0, 1), transform 280ms cubic-bezier(0.2, 0, 0, 1);
+  will-change: opacity, transform;
+}
+.theme-night.expanded .scenes {
+  opacity: 0.22;
+  transform: scale(1.03) translateZ(0);
+}
+.theme-night .bg { display: none; }
+.expanded .bg img {
+  opacity: 0.22;
+  transform: scale(1.03) translateZ(0);
+}
+.scene { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: none; opacity: 0; transition: opacity 1600ms ease-in-out; }
+.scene.ready { display: block; }
+.scene.on { opacity: 1; }
+.scene .sbg, .scene .fg { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+.scene .shade { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
+.gclock {
+  position: absolute; left: 0; right: 0; top: 9.375rem; text-align: center; white-space: nowrap;
+  font-family: "Antonio", "Arial Narrow", sans-serif; font-weight: 300; font-size: 25rem; line-height: 0.82; letter-spacing: -0.02em;
+  filter: drop-shadow(0 0.375rem 1.75rem rgba(0, 0, 0, 0.16));
+}
+.gclock .fill {
+  display: block; padding: 0.2em 0; margin: -0.2em 0; color: transparent;
+  -webkit-background-clip: text; background-clip: text; background-size: 100vw 100vh; background-repeat: no-repeat;
+}
+.gclock .rim { position: absolute; top: 0; right: 0; bottom: 0; left: 0; color: rgba(255, 255, 255, 0.1); -webkit-text-stroke: 0.09rem rgba(255, 255, 255, 0.55); }
+.gclock .sheen {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; color: transparent; -webkit-background-clip: text; background-clip: text;
+  background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.22) 100%);
+}
+/* after 9 pm everything dims a little */
+.night .scene .sbg, .night .scene .fg, .night .scene .gclock { filter: brightness(0.72); }
+.theme-night .scrim {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.5) 100%);
+  transition: background 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.theme-night.expanded .scrim {
+  background: rgba(10, 10, 14, 0.18);
+}
+/* When expanded, the app view opens directly over home elements with zero erasing animation */
+.theme-night.expanded .gclock,
+.theme-night.expanded .top,
+.theme-night.expanded .date {
+  display: none !important;
+}
+
+/* Alpine Mountain: 4K atmospheric mountain scene with weather-driven backdrops and frosted glass clock */
+.s-alpine-mountain .sbg { filter: brightness(0.92); }
+.s-alpine-mountain .shade {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0) 38%, rgba(0, 0, 0, 0.42) 100%);
+}
+.s-alpine-mountain .gclock {
+  top: 9.375rem;
+  font-size: 25rem;
+}
+.s-alpine-mountain .gclock .fill {
+  filter: brightness(1.2) saturate(1.15);
+  opacity: 0.92;
+}
+.s-alpine-mountain .gclock .rim {
+  color: rgba(255, 255, 255, 0.1);
+  -webkit-text-stroke: 0.09rem rgba(255, 255, 255, 0.6);
+}
+
+/* glass, as on the lock screen */
+.theme-night .people, .theme-night .qbtn, .theme-night .ncard {
+  background: rgba(28, 22, 28, 0.88);
+  box-shadow: inset 0 0 0 0.0625rem rgba(255, 210, 220, 0.16), inset 0 0.0625rem 0 rgba(255, 220, 230, 0.14), 0 1.5rem 3.75rem rgba(0, 0, 0, 0.28);
+}
+.theme-night .hero, .theme-night .time, .theme-night .place { display: none; }
+.theme-night .date {
+  position: fixed; left: 0; right: 0; top: 6rem; margin: 0; text-align: center;
+  font-size: 2.125rem; line-height: 2.5rem; font-weight: 500; color: #fff;
+  text-shadow: 0 0.125rem 1.125rem rgba(0, 0, 0, 0.25); transition: opacity 600ms ease-in-out;
+}
+.theme-night .date .wx { color: rgba(255, 255, 255, 0.78); font-weight: 400; }
+.theme-night .date { white-space: nowrap; }
+/* fitDate() in app.js: not enough room between the people switch and the quick buttons */
+.theme-night .date.tight .ww, .theme-night .date.tighter .wx { display: none; }
+/* the date sits just above each scene's clock; it fades out while the scenes swap */
+.theme-night .date.swap { opacity: 0; }
+.scene-alpine-mountain .date {
+  top: 6.25rem;
+  color: #fff;
+  text-shadow: 0 0.125rem 1.125rem rgba(0, 0, 0, 0.4);
+}
+.scene-alpine-mountain .date .wx {
+  color: rgba(255, 255, 255, 0.85);
+}
+.theme-night .date svg { width: 1.875rem; height: 1.875rem; vertical-align: -0.3rem; margin: 0 0.4rem 0 1rem;
+  fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.theme-night .quick { margin-top: 0; }
+/* the saved copy, computer off: app.js leaves out the quick buttons that need the bridge */
+/* sleep timer: a round glass button; its label shows only while a timer runs */
+.theme-night .qbtn { min-width: 5.5rem; height: 5.5rem; justify-content: center; padding: 0 1.75rem; border-radius: 2.75rem; }
+.theme-night .qbtn svg { width: 2.25rem; height: 2.25rem; }
+.theme-night .qbtn span { display: none; }
+.theme-night .qbtn.set span { display: inline; }
+/* the picture button always says which mode the TV is in */
+.theme-night #q-picture span { display: inline; }
+.theme-night .qbtn.focus { background: #fff; color: #111; }
+
+/* Keep watching: three glass cards */
+.theme-night .shelf {
+  top: auto;
+  bottom: 19.5rem;
+  left: var(--safe-x);
+  right: var(--safe-x);
+}
+.theme-night.expanded .shelf {
+  display: none !important;
+}
+.theme-night .shelf-head { height: 2.25rem; margin-bottom: 1rem; }
+.theme-night .shelf-head h2 { font-size: 1.5625rem; font-weight: 600; color: rgba(255, 255, 255, 0.78); }
+.theme-night .shelf-track { gap: 1.375rem; }
+.ncard { display: flex; align-items: center; gap: 1.25rem; width: 32.5rem; padding: 1rem; border-radius: 1.875rem; transition: transform 240ms var(--ease), box-shadow 240ms var(--ease); }
+.ncard .thumb { width: 10.5rem; height: 5.9375rem; flex: none; border-radius: 1rem; object-fit: cover; background: rgba(255, 255, 255, 0.08); }
+.ncard .t { min-width: 0; flex: 1; }
+.ncard .nap { display: flex; align-items: center; gap: 0.625rem; font-size: 1.1875rem; line-height: 1.5rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.58); white-space: nowrap; overflow: hidden; }
+.ncard .nap img { width: 1.625rem; height: 1.625rem; border-radius: 0.4375rem; object-fit: cover; }
+.ncard b { display: block; margin-top: 0.375rem; font-size: 1.8125rem; line-height: 2.25rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ncard i { display: block; font-style: normal; font-size: 1.3125rem; line-height: 1.75rem; color: rgba(255, 255, 255, 0.78); }
+.ncard .nbar { display: block; height: 0.3125rem; margin-top: 0.625rem; border-radius: 0.2rem; background: rgba(255, 255, 255, 0.25); overflow: hidden; }
+.ncard .nbar i { height: 100%; background: #fff; }
+.ncard.focus { transform: scale(1.05); box-shadow: 0 0 0 0.1875rem #fff, 0 1.25rem 2.5rem rgba(0, 0, 0, 0.45); }
+
+/* the dock */
+.theme-night .apps {
+  position: absolute;
+  left: var(--safe-x);
+  right: var(--safe-x);
+  top: 4.5rem;
+  height: calc(100vh - 6.5rem);
+  transform: translateY(calc(100vh - 24.5rem));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: auto;
+  transition: transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow-y: hidden;
+  will-change: transform;
+  z-index: 10;
+}
+.theme-night.expanded .apps {
+  transform: translateY(0);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.theme-night.expanded .apps::-webkit-scrollbar {
+  display: none;
+}
+.theme-night .apps::before {
+  content: "";
+  display: block;
+  width: 4.25rem;
+  height: 2.25rem;
+  margin-bottom: 1.25rem;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 14' fill='none' stroke='rgba(255,255,255,0.92)' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='21 11 12 3 3 11'%3E%3C/polyline%3E%3C/svg%3E") no-repeat center;
+  background-size: contain;
+  opacity: 0.95;
+  filter: drop-shadow(0 0.125rem 0.5rem rgba(0, 0, 0, 0.7));
+  transition: opacity 250ms ease, transform 250ms ease;
+  will-change: opacity, transform;
+}
+.theme-night.expanded .apps::before {
+  opacity: 0;
+  transform: translateY(-0.5rem) scale(0.8);
+  pointer-events: none;
+  visibility: hidden;
+}
+.theme-night .grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-auto-rows: 11.25rem;
+  column-gap: 2rem;
+  row-gap: 3rem;
+  width: 100%;
+  padding: 1.5rem 1.75rem;
+  border-radius: 2.5rem;
+  background: rgba(24, 25, 32, 0.85);
+  border: 1.2px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.25);
+  position: relative;
+}
+.theme-night.expanded .grid {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 1.5rem 1.75rem 4rem 1.75rem;
+}
+/* In expanded mode, the favorite apps dock pill stays cleanly behind Row 0 without blur bleeding or murky fondu */
+.theme-night.expanded .grid::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 14.25rem;
+  border-radius: 2.5rem;
+  background: rgba(28, 29, 36, 0.38);
+  border: 1.2px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+  z-index: 0;
+}
+.theme-night .app {
+  width: 100%;
+  height: 11.25rem;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.25);
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), box-shadow 180ms ease, border-color 180ms ease;
+  will-change: transform;
+  overflow: hidden;
+  transform-origin: center center;
+  position: relative;
+  z-index: 1;
+}
+.theme-night .app .face {
+  width: 100%;
+  height: 100%;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.theme-night .app .face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 1.5rem;
+  transition: filter 180ms ease;
+}
+.theme-night .app:not(.focus) .face img {
+  filter: brightness(0.96);
+}
+.theme-night .app .face img.banner-fallback {
+  width: 6.25rem;
+  height: 6.25rem;
+  object-fit: contain;
+  margin: auto;
+  border-radius: 1.25rem;
+}
+.theme-night .app .face.tool {
+  background: #ffffff;
+}
+.theme-night .app .face.tool svg {
+  width: 4.75rem;
+  height: 4.75rem;
+  stroke: #1e1f24;
+  stroke-width: 1.75;
+}
+.theme-night .app .face.tool.more-tool svg {
+  width: 3.75rem;
+  height: 3.75rem;
+  fill: #1e1f24;
+  stroke: #1e1f24;
+}
+.theme-night .app .face.word {
+  font-size: 1.625rem;
+  font-weight: 600;
+  padding: 0 1rem;
+  background: #ffffff;
+  color: #1e1f24;
+  text-align: center;
+}
+.theme-night .app.focus {
+  transform: scale(1.05);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 3px #ffffff, 0 1rem 2.5rem rgba(0, 0, 0, 0.65);
+  z-index: 10;
+}
+.theme-night .app.focus .face {
+  box-shadow: none;
+}
+.theme-night .app .label,
+.theme-night.expanded .app .label,
+.theme-night.expanded .app.focus .label {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ncard { transition: none; }
+}
+
+/* ================= people: a head icon and its list, for three or more ================= */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.people-wrap { position: relative; }
+.avatar {
+  display: flex; align-items: center; justify-content: center; flex: none; width: 2.25rem; height: 2.25rem; border-radius: 50%;
+  font-size: 1.25rem; line-height: 1; font-weight: 700; color: #fff; text-shadow: 0 0.0625rem 0.25rem rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 0 0 0.0625rem rgba(255, 255, 255, 0.28);
+}
+.people.head { padding: 0.375rem; border-radius: 50%; transition: transform 200ms var(--ease), box-shadow 200ms var(--ease); }
+.people.head .avatar { width: 4.75rem; height: 4.75rem; font-size: 2.125rem; }
+.theme-night .people.head.focus, .people.head.focus { transform: scale(1.08); box-shadow: 0 0 0 0.1875rem #fff, 0 0.75rem 1.75rem rgba(0, 0, 0, 0.4); }
+.people-pop {
+  display: none; position: absolute; left: 0; top: calc(100% + 1rem); z-index: 5; min-width: 24rem; padding: 0.625rem;
+  border-radius: 2rem; background: rgba(28, 24, 30, 0.95);
+  box-shadow: inset 0 0 0 0.0625rem rgba(255, 220, 230, 0.16), 0 1.5rem 3.75rem rgba(0, 0, 0, 0.45); text-shadow: none;
+}
+.people-pop.on { display: block; }
+.plist { display: flex; flex-direction: column; gap: 0.25rem; }
+.prow {
+  display: flex; align-items: center; gap: 1rem; padding: 0.5rem 1.25rem 0.5rem 0.5rem; border-radius: 1.5rem;
+  font-size: 1.6875rem; line-height: 2.25rem; color: rgba(255, 255, 255, 0.88);
+  transition: transform 200ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.prow .avatar { width: 3rem; height: 3rem; font-size: 1.375rem; }
+.prow b { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pmark { display: flex; font-style: normal; }
+.pmark svg { width: 1.75rem; height: 1.75rem; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.prow.focus { background: #fff; color: #111; transform: scale(1.04); }
+.prow.lifted { transform: scale(1.07) translateX(0.5rem); box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.4); animation: wiggle 0.32s ease-in-out infinite alternate; }
+.phint { margin: 0.625rem 0.75rem 0.25rem; font-size: 1.1875rem; line-height: 1.5rem; font-weight: 500; color: rgba(255, 255, 255, 0.62); }
+
+/* ================= moving apps with the TV remote, and new apps ================= */
+@keyframes wiggle { from { rotate: -2deg; } to { rotate: 2deg; } }
+.app .dot {
+  position: absolute; top: -0.375rem; right: -0.375rem; z-index: 2; width: 1.125rem; height: 1.125rem; border-radius: 50%;
+  background: #0a84ff; box-shadow: 0 0 0 0.1875rem rgba(0, 0, 0, 0.3);
+}
+.theme-night .app.lifted, .theme-night .app.lifted.focus { z-index: 3; transform: scale(1.2) translateY(-1.5rem); }
+.theme-night .app.lifted .face { animation: wiggle 0.32s ease-in-out infinite alternate; box-shadow: 0 0 0 0.25rem #fff, 0 1.75rem 3rem rgba(0, 0, 0, 0.55); }
+.theme-night .app.lifted .face img { filter: none; }
+.theme-night.lifting .app:not(.lifted) .face { opacity: 0.7; }
+/* while an app is moved (or a hint shows over the dock) the cards step aside, so the hint has the space */
+.theme-night .shelf { transition: opacity 240ms var(--ease); }
+.theme-night.lifting .shelf, .theme-night.hinting .shelf { opacity: 0; }
+.hint { display: none; }
+.theme-night .hint.on {
+  display: block; position: absolute; left: 50%; bottom: calc(100% + 2.5rem); transform: translateX(-50%); white-space: nowrap;
+  padding: 0.625rem 1.5rem; border-radius: 2rem; font-size: 1.4375rem; line-height: 2rem; font-weight: 600; color: #fff;
+  background: rgba(28, 22, 28, 0.95);
+  box-shadow: inset 0 0 0 0.0625rem rgba(255, 210, 220, 0.16), 0 1rem 2.5rem rgba(0, 0, 0, 0.28);
+}
+@media (prefers-reduced-motion: reduce) {
+  .prow.lifted, .theme-night .app.lifted .face { animation: none; }
+}
+
+/* Scenes and places */
+
+/* ================= the gear tile's menu: Home settings or TV settings ================= */
+.gear-backdrop {
+  display: none; position: fixed; inset: 0; z-index: 998;
+  background: rgba(0, 0, 0, 0.75);
+}
+.gearing .gear-backdrop { display: block; }
+.gear-pop {
+  display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 1000; width: 44rem; max-width: 90vw; padding: 1.5rem;
+  border-radius: 2.25rem; background: #18151c;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 2.5rem 6rem rgba(0, 0, 0, 0.75); text-shadow: none;
+}
+.gear-pop.on { display: flex; flex-direction: column; gap: 0.625rem; }
+.gear-head { padding: 0.25rem 0.75rem 0.5rem; font-size: 1.875rem; font-weight: 700; color: #fff; letter-spacing: -0.015em; }
+/* the cards step aside while the menu is open, as they do for the move hint */
+.theme-night.gearing .shelf { opacity: 0; }
+.grow {
+  display: flex; align-items: center; gap: 1.25rem; padding: 0.875rem 1.75rem 0.875rem 0.875rem; border-radius: 1.5rem;
+  color: rgba(255, 255, 255, 0.92); transition: transform 200ms var(--ease), background 200ms var(--ease);
+}
+.grow + .grow { margin-top: 0.25rem; }
+.grow i { display: flex; flex: none; align-items: center; justify-content: center; width: 3.5rem; height: 3.5rem; border-radius: 1rem; background: rgba(255, 255, 255, 0.12); }
+.grow svg { width: 2rem; height: 2rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.grow b { display: block; font-size: 1.6875rem; line-height: 2.125rem; font-weight: 620; }
+.grow small { display: block; font-size: 1.1875rem; line-height: 1.5rem; color: rgba(255, 255, 255, 0.62); }
+.grow.focus { background: #fff; color: #111; transform: scale(1.04); box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.35); }
+.grow.focus i { background: rgba(0, 0, 0, 0.07); }
+.grow.focus small { color: rgba(0, 0, 0, 0.6); }
+
+/* ================= Home settings: a tvOS style list, sections left, rows right ================= */
+.settings {
+  display: none; position: fixed; inset: 0; z-index: 30; grid-template-columns: 36rem minmax(0, 1fr); column-gap: 4rem;
+  padding: var(--safe-y) var(--safe-x); text-shadow: none;
+  background: #0e0e12;
+}
+.settings.on { display: grid; }
+/* the home underneath stays still while the list is open */
+.setting .tile.focus .face, .setting .tile.focus .face::after { animation: none; }
+.set-side { display: flex; flex-direction: column; min-height: 0; }
+.set-title { margin: 2.25rem 0 2.5rem 1.25rem; font-size: 2.875rem; line-height: 3.75rem; font-weight: 700; letter-spacing: -0.022em; white-space: nowrap; }
+.set-secs { display: flex; flex-direction: column; gap: 0.375rem; }
+.ssec {
+  display: flex; align-items: center; gap: 1.25rem; min-height: 4.75rem; padding: 0.5rem 1.5rem 0.5rem 0.875rem; border-radius: 1.5rem;
+  font-size: 1.75rem; line-height: 2.25rem; font-weight: 600; color: rgba(255, 255, 255, 0.76);
+  transition: transform 200ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.ssec i { display: flex; flex: none; align-items: center; justify-content: center; width: 3.25rem; height: 3.25rem; border-radius: 1rem; background: rgba(255, 255, 255, 0.1); }
+.ssec svg { width: 1.875rem; height: 1.875rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ssec.on { background: rgba(255, 255, 255, 0.13); color: #fff; }
+.ssec.focus { background: #fff; color: #111; transform: scale(1.04); box-shadow: 0 1rem 2.25rem rgba(0, 0, 0, 0.45); }
+.ssec.focus i { background: rgba(0, 0, 0, 0.07); }
+
+.set-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.set-crumb { height: 2rem; margin: 0.75rem 0 0 1.75rem; font-size: 1.3125rem; line-height: 2rem; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
+.set-head { margin: 0.25rem 0 1.5rem 1.75rem; font-size: 2.375rem; line-height: 3rem; font-weight: 680; letter-spacing: -0.015em; }
+.set-rows {
+  position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.5rem;
+  margin: -1rem -1.75rem; padding: 1rem 1.75rem 3rem; overflow: hidden; scroll-behavior: smooth;
+  /* a long list fades out at its edges instead of being cut */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 1rem, #000 calc(100% - 3rem), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 1rem, #000 calc(100% - 3rem), transparent 100%);
+}
+.srow {
+  flex: none; display: flex; align-items: center; gap: 1.25rem; min-height: 4.75rem; padding: 0.75rem 1.75rem; border-radius: 1.5rem;
+  background: rgba(255, 255, 255, 0.08); font-size: 1.75rem; line-height: 2.25rem; color: rgba(255, 255, 255, 0.92);
+  transition: transform 200ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.srow .sl { flex: 1; min-width: 0; }
+.srow .sl b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.srow .sl small { display: block; margin-top: 0.125rem; font-size: 1.25rem; line-height: 1.625rem; color: rgba(255, 255, 255, 0.6); }
+.srow .sv { flex: none; max-width: 48%; text-align: right; font-weight: 500; color: rgba(255, 255, 255, 0.62); overflow-wrap: anywhere; }
+.srow.focus { background: #fff; color: #111; transform: scale(1.02); box-shadow: 0 1.25rem 2.5rem rgba(0, 0, 0, 0.45); }
+.srow.focus .sl small, .srow.focus .sv { color: rgba(0, 0, 0, 0.6); }
+.srow.k-info { min-height: 0; padding: 0.5rem 1.75rem; background: none; font-size: 1.4375rem; line-height: 1.875rem; color: rgba(255, 255, 255, 0.68); }
+.srow.k-info .sl b { font-weight: 500; }
+.srow.k-info .sl small { font-size: 1.25rem; }
+.srow.danger .sl b { color: #ff7b72; }
+.srow.danger.focus .sl b { color: #c4271b; }
+.srow.lifted { transform: scale(1.04) translateX(0.75rem); box-shadow: 0 1.25rem 2.5rem rgba(0, 0, 0, 0.5); animation: wiggle 0.32s ease-in-out infinite alternate; }
+.shead { flex: none; margin: 1.125rem 0 0.125rem 1.75rem; font-size: 1.25rem; line-height: 1.75rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.5); }
+.shead:first-child { margin-top: 0; }
+.smark { display: flex; flex: none; font-style: normal; }
+.smark svg { width: 1.875rem; height: 1.875rem; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.smark.dim { opacity: 0.45; }
+.sbox { display: flex; flex: none; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: 50%; box-shadow: inset 0 0 0 0.1875rem rgba(255, 255, 255, 0.42); }
+.sbox.on { background: #30d158; box-shadow: none; color: #fff; }
+.sbox svg { width: 1.375rem; height: 1.375rem; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
+.srow.focus .sbox:not(.on) { box-shadow: inset 0 0 0 0.1875rem rgba(0, 0, 0, 0.32); }
+.sicon { flex: none; width: 3rem; height: 3rem; border-radius: 0.75rem; object-fit: cover; }
+.sicon.none { display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.14); font-size: 1.375rem; font-weight: 700; }
+.sicon.none svg { width: 1.75rem; height: 1.75rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.srow.focus .sicon.none { background: rgba(0, 0, 0, 0.08); }
+.sthumb { flex: none; width: 5.5rem; height: 3.125rem; border-radius: 0.625rem; object-fit: cover; background: rgba(255, 255, 255, 0.08); }
+.srow .avatar { width: 3rem; height: 3rem; font-size: 1.375rem; }
+/* the text box for a place, a name or a photo's address */
+.set-type { display: none; flex: none; margin: 0 0 1.25rem; padding: 0.875rem 1.75rem 1rem; border-radius: 1.5rem; background: rgba(255, 255, 255, 0.12); box-shadow: inset 0 0 0 0.1875rem #fff; }
+.set-type.on { display: block; }
+.set-type-label { display: block; margin-bottom: 0.25rem; font-size: 1.3125rem; line-height: 1.75rem; font-weight: 600; color: rgba(255, 255, 255, 0.7); }
+.set-type input {
+  width: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: #fff; caret-color: #0a84ff;
+  font: inherit; font-size: 2.25rem; line-height: 3rem; font-weight: 500; user-select: text; -webkit-user-select: text;
+}
+.set-msg { flex: none; min-height: 2rem; margin: 1.5rem 0 0 1.75rem; font-size: 1.4375rem; line-height: 2rem; font-weight: 550; color: #8fd3ff; }
+.set-hint { flex: none; margin: 0.25rem 0 0 1.75rem; font-size: 1.25rem; line-height: 1.75rem; color: rgba(255, 255, 255, 0.5); }
+@media (prefers-reduced-motion: reduce) {
+  .srow, .ssec, .grow { transition: none; }
+  .srow.lifted { animation: none; }
+  .set-rows { scroll-behavior: auto; }
+}
+
+/* Onboarding / Premier lancement: interface épurée sans menu latéral avec boutons en bas */
+.settings.onboarding.on {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.settings.onboarding .set-side {
+  display: none !important;
+}
+.settings.onboarding .set-main {
+  width: 100% !important;
+  max-width: 62rem !important;
+  height: 100% !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.settings.onboarding .set-crumb {
+  margin: 1.5rem 0 0.5rem 0 !important;
+  text-align: center !important;
+  font-size: 1.375rem !important;
+  font-weight: 600 !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  letter-spacing: 0.05em !important;
+}
+.settings.onboarding .set-head {
+  margin: 0 0 2rem 0 !important;
+  text-align: center !important;
+  font-size: 2.75rem !important;
+  line-height: 3.375rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+}
+.settings.onboarding .set-rows {
+  flex: 1 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  margin: 0 !important;
+  padding: 0.5rem 0 1.5rem !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+.settings.onboarding .sspacer {
+  flex: 1 1 auto;
+  min-height: 2rem;
+}
+.settings.onboarding .ob-nav-pair {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: auto;
+  padding-top: 1.25rem;
+  width: 100%;
+}
+.settings.onboarding .ob-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: 4.75rem;
+  padding: 0.75rem 2rem;
+  border-radius: 1.5rem;
+  font-family: inherit;
+  font-size: 1.75rem;
+  line-height: 2.25rem;
+  font-weight: 650;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+  transition: transform 200ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.settings.onboarding .ob-btn-prev {
+  flex: 0 0 35%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+}
+.settings.onboarding .ob-btn-next {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.settings.onboarding .ob-btn.focus {
+  background: #fff !important;
+  color: #111 !important;
+  transform: scale(1.02);
+  box-shadow: 0 1.25rem 2.5rem rgba(0, 0, 0, 0.45);
+}
+.settings.onboarding .ob-btn svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ================= Smart home (optional): rooms and scenes through Home Assistant =================
+   Only drawn when config.json has a home_assistant section (smarthome.js). Rooms are cards with a
+   dial; their four buttons (cooler, warmer, on or off, mode) and the scenes take the remote. */
+.smart {
+  display: none; position: fixed; inset: 0; z-index: 30; flex-direction: column;
+  padding: var(--safe-y) var(--safe-x); text-shadow: none;
+  background: #0e0e12;
+}
+.smart.on { display: flex; }
+.smarting .tile.focus .face, .smarting .tile.focus .face::after { animation: none; }
+.sh-title { margin: 2.25rem 0 1.75rem 0.25rem; font-size: 2.875rem; line-height: 3.75rem; font-weight: 700; letter-spacing: -0.022em; }
+.sh-head { margin: 0 0 1rem 0.25rem; font-size: 1.25rem; line-height: 1.75rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.5); }
+.sh-note { margin: -0.25rem 0 1.25rem 0.25rem; font-size: 1.5rem; line-height: 2.125rem; color: var(--text-2); }
+.sh-note.warn { color: var(--warn); }
+.sh-view { overflow: hidden; margin: -1rem -1rem 1.75rem; padding: 1rem; }
+.sh-rooms { display: flex; gap: 2rem; transition: transform 300ms var(--ease); }
+.sh-room {
+  flex: 0 0 25.5rem; padding: 1.75rem 1.75rem 1.5rem; border-radius: 2rem; background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 0.0625rem rgba(255, 255, 255, 0.1); transition: background 200ms var(--ease), transform 200ms var(--ease);
+}
+.sh-room.here { background: rgba(255, 255, 255, 0.14); }
+.sh-name { font-size: 1.875rem; line-height: 2.375rem; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-dial { position: relative; width: 13.5rem; height: 13.5rem; margin: 0.75rem auto 0.25rem; }
+.sh-dial svg { width: 100%; height: 100%; transform: rotate(135deg); }
+.sh-dial .track { fill: none; stroke: rgba(255, 255, 255, 0.14); stroke-width: 8; stroke-linecap: round; }
+.sh-dial .arc { fill: none; stroke: #9fd8ff; stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 300ms var(--ease), stroke 300ms; }
+.sh-room.heat .sh-dial .arc { stroke: #ffb46e; }
+.sh-room.off .sh-dial .arc, .sh-room.quiet .sh-dial .arc { stroke: rgba(255, 255, 255, 0.3); }
+.sh-val { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.sh-val b { font-family: "Antonio", "Inter", sans-serif; font-size: 5.5rem; line-height: 5.75rem; font-weight: 300; letter-spacing: -0.03em; }
+.sh-val span { font-size: 1.3125rem; line-height: 1.75rem; color: var(--text-2); }
+.sh-room.off .sh-val b, .sh-room.quiet .sh-val b { color: var(--text-2); }
+.sh-now { min-height: 2.125rem; text-align: center; font-size: 1.5rem; line-height: 2.125rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-ctl { display: flex; gap: 0.75rem; justify-content: center; margin-top: 1.25rem; }
+.sh-b {
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem; min-width: 4rem; height: 4rem; padding: 0 0.875rem;
+  border-radius: 2rem; background: rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.92);
+  transition: transform 200ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.sh-b i { display: flex; }
+.sh-b svg { width: 1.875rem; height: 1.875rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sh-b span { font-size: 1.375rem; line-height: 1.75rem; font-weight: 600; white-space: nowrap; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+.sh-room:not(.off):not(.quiet) .sh-power { background: rgba(159, 216, 255, 0.3); }
+.sh-room.heat:not(.off):not(.quiet) .sh-power { background: rgba(255, 180, 110, 0.32); }
+.smart .sh-room .sh-b.focus { background: #fff; color: #111; transform: scale(1.12); box-shadow: 0 0.75rem 1.75rem rgba(0, 0, 0, 0.45); }
+.sh-scenes { display: flex; flex-wrap: wrap; gap: 1.25rem; }
+/* five to a line, the same width each, so up and down land where they look like they should */
+.sh-scene {
+  display: flex; flex: 0 0 20.75rem; align-items: center; gap: 1rem; height: 5rem; padding: 0 1.75rem 0 1rem; border-radius: 1.5rem;
+  background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.92);
+  transition: transform 200ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.sh-scene i { display: flex; align-items: center; justify-content: center; width: 3.25rem; height: 3.25rem; border-radius: 1rem; background: rgba(255, 255, 255, 0.12); }
+.sh-scene svg { width: 1.75rem; height: 1.75rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sh-scene b { min-width: 0; font-size: 1.625rem; line-height: 2.125rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-scene.focus { background: #fff; color: #111; transform: scale(1.06); box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.45); }
+.sh-scene.focus i { background: rgba(0, 0, 0, 0.07); }
+.sh-msg { min-height: 2rem; margin: auto 0 0 0.25rem; font-size: 1.4375rem; line-height: 2rem; font-weight: 550; color: #8fd3ff; }
+.sh-hint { margin: 0.25rem 0 0 0.25rem; font-size: 1.25rem; line-height: 1.75rem; color: rgba(255, 255, 255, 0.5); }
+@media (prefers-reduced-motion: reduce) {
+  .sh-b, .sh-scene, .sh-room, .sh-rooms, .sh-dial .arc { transition: none; }
+}
+
+body.system-sheet-open > * {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: opacity 120ms ease;
+}
+body.system-sheet-open {
+  background: #0A0A0C !important;
+}

@@ -1,0 +1,30 @@
+{
+  "default_tv": "salon",
+  "tvs": [
+    {
+      "id": "salon",
+      "name": "Salon",
+      "label": "Talo TV Salon",
+      "quick": ["sleep"]
+    }
+  ],
+  "people": [],
+  "home": {
+    "look": "night",
+    "scenes": ["night", "golden", "water", "fog", "dawn"],
+    "scene_seconds": 20,
+    "clock": "24h",
+    "dock_size": 4,
+    "hide_packages": [],
+    "language": "en"
+  },
+  "phone_remote": false,
+  "ask": { "enabled": false },
+  "weather": {
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "place": "Paris",
+    "timezone": "Europe/Paris"
+  },
+  "country": "FR"
+}

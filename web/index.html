@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr-FR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Talo TV</title>
+<link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/antonio-latin-300.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="bg" id="bg" aria-hidden="true"></div>
+<!-- Night look only: five scenes that take turns (photo, glass clock, the cut-out in front), built by app.js -->
+<div class="scenes" id="scenes" aria-hidden="true"></div>
+<div class="scrim" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="top-left">
+    <div class="people-wrap">
+      <div class="people" id="people"></div>
+      <!-- three or more people: the list the head icon opens -->
+      <div class="people-pop" id="people-pop" role="listbox" aria-label="Qui regarde"></div>
+    </div>
+    <div class="hero" id="hero" aria-live="polite">
+      <h1 id="hero-title"></h1>
+      <p id="hero-sub"></p>
+    </div>
+  </div>
+  <div class="clock">
+    <div class="time" id="time"></div>
+    <div class="date" id="date"></div>
+    <div class="place" id="place"></div>
+    <div class="quick" id="quick">
+      <div class="qbtns" id="qbtns"></div>
+      <div class="sleep-menu" id="sleep-menu"></div>
+    </div>
+    <p class="quick-note" id="quick-note"></p>
+  </div>
+</header>
+
+<main class="home">
+  <section class="shelf" id="shelf-section" aria-labelledby="shelf-title">
+    <header class="shelf-head">
+      <h2 id="shelf-title">Reprendre la lecture</h2>
+      <p class="status" id="status"></p>
+    </header>
+    <div class="shelf-track" id="shelf"></div>
+  </section>
+
+  <section class="apps" id="apps-section" aria-label="Applications">
+    <p class="hint" id="hint" aria-live="polite"></p>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+
+<div class="gear-backdrop" id="gear-backdrop"></div>
+<div class="gear-pop" id="gear-pop" role="menu"></div>
+
+<!-- Paramètres Talo TV -->
+<div class="settings" id="settings" role="dialog" aria-modal="true" aria-label="Paramètres Talo TV">
+  <div class="set-side">
+    <h1 class="set-title" id="set-title"></h1>
+    <div class="set-secs" id="set-secs"></div>
+  </div>
+  <div class="set-main">
+    <p class="set-crumb" id="set-crumb"></p>
+    <h2 class="set-head" id="set-head"></h2>
+    <div class="set-type" id="set-type">
+      <label class="set-type-label" id="set-type-label" for="set-input"></label>
+      <input id="set-input" type="text" autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="set-rows" id="set-rows"></div>
+    <p class="set-msg" id="set-msg" aria-live="polite"></p>
+    <p class="set-hint" id="set-hint"></p>
+  </div>
+</div>
+
+<div class="smart" id="smart" role="dialog" aria-modal="true" aria-label="Maison connectée"></div>
+
+<script src="i18n.js"></script>
+<script src="config.js"></script>
+<script src="smarthome.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
