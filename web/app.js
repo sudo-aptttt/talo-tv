@@ -1191,7 +1191,7 @@
   function showPhoto() {}
 
   function paintFocus() {
-    if (zone === "onboarding") { renderOnboarding(); return; }
+    if (zone === "onboarding") { clearFocus(); renderOnboarding(); return; }
     if (zone === "settings") { renderSettings(); return; }
     if (zone === "smart") { window.smartHome.paint(); return; }
     clearFocus();
@@ -1325,6 +1325,7 @@
 
   // Start on the people switch, so the first press picks who is watching.
   function startFocus() {
+    if (zone === "onboarding") return;
     s = 0; g = 0;
     if (peopleOn()) toPeople();
     else zone = shelfEls.length ? "shelf" : "grid";
@@ -1978,7 +1979,7 @@
     return rows;
   }
 
-  // ================= Cinematic Onboarding Engine =================
+  // ================= Leanback Minimalist Onboarding =================
   var obStep = 0;
   var obFocus = 0;
 
@@ -1990,8 +1991,11 @@
     zone = "onboarding";
     obStep = 0;
     obFocus = 0;
+    touched = true;
+    clearFocus();
     var overlay = $("onboarding");
     if (overlay) overlay.classList.add("on");
+    document.documentElement.classList.add("onboarding-active");
     renderOnboarding();
   }
 
@@ -2001,7 +2005,9 @@
     savePeopleList();
     var overlay = $("onboarding");
     if (overlay) overlay.classList.remove("on");
+    document.documentElement.classList.remove("onboarding-active");
     zone = "grid";
+    touched = false;
     try { refreshWeather(); } catch (e) {}
     try { render(); } catch (e) {}
     try { ensureFocus(); } catch (e) {}
@@ -2033,57 +2039,48 @@
     var html = "";
 
     if (obStep === 0) {
-      // Step 0: Language selection (Instant Glide)
+      // Step 0: Langue
       var langs = (L && L.langs && L.langs.length) ? L.langs : [
         { id: "fr", name: "Français" },
         { id: "en", name: "English" }
       ];
       if (obFocus >= langs.length) obFocus = 0;
 
-      html += '<div class="ob-badge">' + (isFr ? 'Étape 1 sur 3' : 'Step 1 of 3') + '</div>';
-      html += '<h1 class="ob-title">' + (isFr ? 'Bienvenue sur Talo TV' : 'Welcome to Talo TV') + '</h1>';
-      html += '<p class="ob-sub">' + (isFr ? 'Sélectionnez votre langue d\'affichage' : 'Choose your preferred language') + '</p>';
+      html += '<h1 class="ob-title">' + (isFr ? 'Langue' : 'Language') + '</h1>';
+      html += '<p class="ob-sub">' + (isFr ? 'Choisissez la langue de votre téléviseur.' : 'Choose your preferred language.') + '</p>';
       html += '<div class="ob-grid">';
       langs.forEach(function (l, idx) {
         var isFoc = (idx === obFocus);
         var isSel = (l.id === curLang);
-        var flag = l.id === "fr" ? "🇫🇷" : l.id === "en" ? "🇬🇧" : l.id === "es" ? "🇪🇸" : l.id === "de" ? "🇩🇪" : "🌐";
-        var subText = l.id === "fr" ? "Français" : l.id === "en" ? "English" : l.name;
         html += '<div class="ob-item' + (isFoc ? ' focus' : '') + (isSel ? ' selected' : '') + '" data-ob-idx="' + idx + '">';
-        html += '<span class="ob-item-icon">' + flag + '</span>';
         html += '<span class="ob-item-title">' + esc(l.name) + '</span>';
-        html += '<span class="ob-item-sub">' + esc(subText) + '</span>';
         html += '</div>';
       });
       html += '</div>';
 
     } else if (obStep === 1) {
-      // Step 1: Clock & Weather format (Instant Glide)
+      // Step 1: Affichage (Horloge & Météo)
       var options = [
         {
           id: "24c",
-          icon: "🕒",
-          title: isFr ? "Format 24h & Celsius (°C)" : "24-hour & Celsius (°C)",
-          sub: isFr ? "Recommandé en Europe (ex: 20:45 · 18°C)" : "European standard (e.g. 20:45 · 18°C)"
+          title: isFr ? "24 heures · °C" : "24 hours · °C",
+          sub: isFr ? "ex. 20:45 · 18°C" : "e.g. 20:45 · 18°C"
         },
         {
           id: "12f",
-          icon: "⏰",
-          title: isFr ? "Format 12h & Fahrenheit (°F)" : "12-hour & Fahrenheit (°F)",
-          sub: isFr ? "Format standard US (ex: 8:45 PM · 65°F)" : "US standard (e.g. 8:45 PM · 65°F)"
+          title: isFr ? "12 heures · °F" : "12 hours · °F",
+          sub: isFr ? "ex. 8:45 PM · 65°F" : "e.g. 8:45 PM · 65°F"
         }
       ];
       if (obFocus >= options.length) obFocus = 0;
 
-      html += '<div class="ob-badge">' + (isFr ? 'Étape 2 sur 3' : 'Step 2 of 3') + '</div>';
-      html += '<h1 class="ob-title">' + (isFr ? 'Affichage & Météo' : 'Display & Weather') + '</h1>';
-      html += '<p class="ob-sub">' + (isFr ? 'Choisissez votre format d\'heure et de température' : 'Select your clock and temperature preferences') + '</p>';
+      html += '<h1 class="ob-title">' + (isFr ? 'Affichage' : 'Display') + '</h1>';
+      html += '<p class="ob-sub">' + (isFr ? 'Choisissez votre format d\'heure et de température.' : 'Select your clock and temperature format.') + '</p>';
       html += '<div class="ob-grid">';
       options.forEach(function (opt, idx) {
         var isFoc = (idx === obFocus);
         var isSel = (opt.id === "24c" ? (CLOCK24 && !WX_F) : (!CLOCK24 && WX_F));
         html += '<div class="ob-item' + (isFoc ? ' focus' : '') + (isSel ? ' selected' : '') + '" data-ob-idx="' + idx + '">';
-        html += '<span class="ob-item-icon">' + opt.icon + '</span>';
         html += '<span class="ob-item-title">' + esc(opt.title) + '</span>';
         html += '<span class="ob-item-sub">' + esc(opt.sub) + '</span>';
         html += '</div>';
@@ -2091,29 +2088,23 @@
       html += '</div>';
 
     } else if (obStep === 2) {
-      // Step 2: Plein Potentiel (1-click activation)
+      // Step 2: Ecran d'accueil
       var actions = [
         {
           id: "activate",
           primary: true,
-          label: isFr ? "Activer Talo TV à 100%" : "Activate Talo TV to 100%"
+          label: isFr ? "Définir par défaut" : "Set as Default"
         },
         {
           id: "skip",
           primary: false,
-          label: isFr ? "Configurer plus tard" : "Set up later"
+          label: isFr ? "Plus tard" : "Later"
         }
       ];
       if (obFocus >= actions.length) obFocus = 0;
 
-      html += '<div class="ob-badge">' + (isFr ? 'Étape 3 sur 3' : 'Step 3 of 3') + '</div>';
-      html += '<h1 class="ob-title">' + (isFr ? 'Libérez le Plein Potentiel' : 'Unleash Full Potential') + '</h1>';
-      html += '<p class="ob-sub">' + (isFr ? 'Profitez d\'une expérience TV fluide, ultra-rapide et garantie sans aucune publicité.' : 'Enjoy a smooth, ultra-fast TV experience with zero ads.') + '</p>';
-      html += '<div class="ob-perks">';
-      html += '<div class="ob-perk"><span>⚡</span> ' + (isFr ? 'Lanceur d\'accueil par défaut' : 'Default Home Launcher') + '</div>';
-      html += '<div class="ob-perk"><span>🎬</span> ' + (isFr ? 'Reprendre la lecture en 1 clic' : '1-Click Watch Next') + '</div>';
-      html += '<div class="ob-perk"><span>🛡️</span> ' + (isFr ? 'Talo Shield anti-pub' : 'Talo Shield Ad-Block') + '</div>';
-      html += '</div>';
+      html += '<h1 class="ob-title">' + (isFr ? 'Écran d\'accueil' : 'Home Screen') + '</h1>';
+      html += '<p class="ob-sub">' + (isFr ? 'Définir Talo TV comme écran d\'accueil de votre téléviseur pour accéder directement à vos applications dès l\'allumage.' : 'Set Talo TV as your default TV launcher to jump straight into your apps.') + '</p>';
       html += '<div class="ob-actions">';
       actions.forEach(function (act, idx) {
         var isFoc = (idx === obFocus);
@@ -2186,12 +2177,10 @@
       obFocus = 0;
       renderOnboarding();
     } else if (obStep === 2) {
-      // Step 2: Plein Potentiel
+      // Step 2: Ecran d'accueil
       if (obFocus === 0) {
-        // Activate full potential: trigger native home + watch next role, then finish
         finishOnboarding(true);
       } else {
-        // Skip for now
         finishOnboarding(false);
       }
     }
@@ -2203,7 +2192,6 @@
       obFocus = 0;
       renderOnboarding();
     } else {
-      // On step 0, back doesn't trap the user; if they press back again, finish cleanly
       finishOnboarding(false);
     }
   }
@@ -3219,6 +3207,11 @@
   function render() {
     renderShelf();
     renderGrid();
+    if (zone === "onboarding") {
+      clearFocus();
+      renderOnboarding();
+      return;
+    }
     if (!touched) startFocus();
     paintFocus();
   }
@@ -3252,7 +3245,7 @@
 
   function refresh() {
     // never reshuffle under something being moved, or under the settings screen
-    if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart") return Promise.resolve();
+    if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart" || zone === "onboarding") return Promise.resolve();
     if (OFFLINE) {
       // only the TV's own apps, in the order last saved; no shows, no Screens
       if (TV) data.apps = sortApps(nativeApps() || []);
@@ -3289,7 +3282,7 @@
     ];
     return Promise.all(jobs.map(function (p) { return p.then(function () { return true; }, function () { return false; }); }))
       .then(function (ok) {
-        if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart") return;
+        if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart" || zone === "onboarding") return;
         data.bridge = ok[0] || ok[2];
         var apps = TV ? nativeApps() : (window.MOCK_APPS ? window.MOCK_APPS.slice() : null);
         if (!apps) apps = (data.bridgeApps || []).filter(function (a) { return a.installed !== false && a.id !== "home"; })
