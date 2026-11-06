@@ -1191,6 +1191,7 @@
   function showPhoto() {}
 
   function paintFocus() {
+    if (zone === "onboarding") { renderOnboarding(); return; }
     if (zone === "settings") { renderSettings(); return; }
     if (zone === "smart") { window.smartHome.paint(); return; }
     clearFocus();
@@ -1245,6 +1246,7 @@
 
   function move(dx, dy) {
     touched = true;
+    if (zone === "onboarding") { moveOnboarding(dx, dy); return; }
     if (zone === "settings") { setMove(dx, dy); return; }
     if (zone === "smart") { window.smartHome.move(dx, dy); return; }
     if (zone === "gear") { if (dy) { gi = Math.max(0, Math.min(1, gi + dy)); renderGear(); } return; }
@@ -1329,6 +1331,7 @@
   }
 
   function goHome() {
+    if (zone === "onboarding") { backOnboarding(); return; }
     if (zone === "settings") { setBack(); return; }
     if (zone === "smart") { closeSmart(); paintFocus(); return; }
     if (zone === "gear") { closeGear(); paintFocus(); return; }
@@ -1352,6 +1355,7 @@
   // there is nothing to pick up here, and then the press counts as a normal OK.
   function hold() {
     touched = true;
+    if (zone === "onboarding") return false;
     if (zone === "settings") return setHold();
     if (zone === "gear" || zone === "smart") return false;
     if (lift) { dropLift(); return true; }
@@ -1366,6 +1370,7 @@
 
   function activate() {
     touched = true;
+    if (zone === "onboarding") { activateOnboarding(); return; }
     if (zone === "settings") { setActivate(); return; }
     if (zone === "smart") { window.smartHome.ok(); return; }
     if (zone === "gear") { if (gi === 0) openSettings(); else openTvSettings(); return; }
@@ -1498,15 +1503,6 @@
   // Saved on this TV (page storage and the launcher's own store, TVOS.keep) and, with a bridge,
   // also on the computer (/api/settings), so the phone and the TV agree.
   var ST_KEY = "tvhome.settings";
-  var ONBOARDING = false;
-  var OB_SECS = [
-    ["ob_lang", "globe"],
-    ["ob_perms", "lock"],
-    ["ob_unit", "cloud"],
-    ["ob_clock", "sleep"],
-    ["ob_loc", "pin"],
-    ["ob_profiles", "person"]
-  ];
   var SECS = [["language", "globe"], ["permissions", "lock"], ["shield", "shield"], ["location", "pin"], ["weather", "cloud"], ["look", "look"],
     ["apps", "apps"], ["people", "person"], ["quick", "bolt"], ["about", "info"]];
   var SET = { col: "secs", sec: 0, ri: 0, keyFocus: null, sub: null, lift: null, confirm: null, dirty: false, typing: null,
@@ -1565,12 +1561,11 @@
     $("shelf-title").textContent = t("keep_watching");
     $("people-pop").setAttribute("aria-label", t("who_watching"));
     $("apps-section").setAttribute("aria-label", t("apps"));
-    $("settings").setAttribute("aria-label", ONBOARDING ? t("setup_title") : t("set_title"));
+    $("settings").setAttribute("aria-label", t("set_title"));
   }
 
   function openSettings() {
     invalidateSettingsCache();
-    ONBOARDING = false;
     closeGear();
     zone = "settings";
     SET.col = "secs"; SET.sec = 0; SET.ri = 0; SET.keyFocus = null; SET.sub = null; SET.lift = null; SET.confirm = null; SET.msg = "";
@@ -1582,7 +1577,6 @@
   // Closing starts the page again when anything changed, so the look, scenes and words all agree.
   function closeSettings() {
     invalidateSettingsCache();
-    if (ONBOARDING) return;
     if (SET.typing) stopTyping();
     if (SET.lift) dropRow();
     $("settings").classList.remove("on");
@@ -1595,7 +1589,6 @@
   // ---- rows ----
   function rowsNow() {
     if (SET.sub) return SET.sub.rows();
-    if (ONBOARDING) return onboardingRows(OB_SECS[SET.sec][0]);
     return sectionRows(SECS[SET.sec][0]);
   }
   function focusable(r) { return !!r && r.kind !== "head" && r.kind !== "info" && r.kind !== "spacer"; }
@@ -1616,15 +1609,6 @@
     if (id === "people") return peopleRows();
     if (id === "quick") return quickRows();
     return aboutRows();
-  }
-
-  function onboardingRows(id) {
-    if (id === "ob_lang") return onboardingLanguageRows();
-    if (id === "ob_perms") return onboardingPermissionsRows();
-    if (id === "ob_unit") return onboardingUnitRows();
-    if (id === "ob_clock") return onboardingClockRows();
-    if (id === "ob_loc") return onboardingLocationRows();
-    return onboardingProfilesRows();
   }
 
   function getPermissionsStatus() {
@@ -1994,275 +1978,248 @@
     return rows;
   }
 
-  function onboardingPermissionsRows() {
-    var rows = permissionsRows();
-    rows.push({ kind: "spacer" });
-    rows.push({ kind: "ob-nav", key: "ob-nav" });
-    return rows;
-  }
-
-  function onboardingLanguageRows() {
-    var L = window.I18N;
-    var rows = L ? L.langs.map(function (l) {
-      return {
-        kind: "choice",
-        key: "ob-lang:" + l.id,
-        label: l.name,
-        lang: l.locale,
-        checked: L.lang() === l.id,
-        act: function () {
-          ST.lang = l.id;
-          L.set(l.id);
-          saveSettings();
-          staticText();
-          renderSettings();
-        }
-      };
-    }) : [];
-    rows.push(info("ob-lang-note", t("lang_note")));
-    rows.push({ kind: "spacer" });
-    rows.push({ kind: "ob-nav", key: "ob-nav" });
-    return rows;
-  }
-
-  function onboardingUnitRows() {
-    return [
-      head(t("ob_unit_title")),
-      {
-        kind: "choice",
-        key: "unit:c",
-        label: t("ob_unit_c"),
-        checked: !WX_F,
-        act: function () {
-          WX_F = false;
-          ST.wx_unit = "c";
-          saveSettings();
-          renderSettings();
-        }
-      },
-      {
-        kind: "choice",
-        key: "unit:f",
-        label: t("ob_unit_f"),
-        checked: !!WX_F,
-        act: function () {
-          WX_F = true;
-          ST.wx_unit = "f";
-          saveSettings();
-          renderSettings();
-        }
-      },
-      info("ob-unit-note", t("wx_night_only")),
-      { kind: "spacer" },
-      { kind: "ob-nav", key: "ob-nav" }
-    ];
-  }
-
-  function onboardingClockRows() {
-    return [
-      head(t("ob_clock_title")),
-      {
-        kind: "choice",
-        key: "clock:24",
-        label: t("ob_clock_24"),
-        checked: !!CLOCK24,
-        act: function () {
-          CLOCK24 = true;
-          ST.clock = "24h";
-          saveSettings();
-          glassShown = "";
-          clock();
-          renderSettings();
-        }
-      },
-      {
-        kind: "choice",
-        key: "clock:12",
-        label: t("ob_clock_12"),
-        checked: !CLOCK24,
-        act: function () {
-          CLOCK24 = false;
-          ST.clock = "12h";
-          saveSettings();
-          glassShown = "";
-          clock();
-          renderSettings();
-        }
-      },
-      { kind: "spacer" },
-      { kind: "ob-nav", key: "ob-nav" }
-    ];
-  }
-
-  var SUGGESTED_CITIES = [
-    { name: "Paris", area: "Île-de-France, France", lat: 48.86, lon: 2.35, timezone: "Europe/Paris" },
-    { name: "Lyon", area: "Auvergne-Rhône-Alpes, France", lat: 45.76, lon: 4.84, timezone: "Europe/Paris" },
-    { name: "Marseille", area: "Provence-Alpes-Côte d'Azur, France", lat: 43.30, lon: 5.37, timezone: "Europe/Paris" },
-    { name: "Bruxelles", area: "Belgique", lat: 50.85, lon: 4.35, timezone: "Europe/Brussels" },
-    { name: "Genève", area: "Suisse", lat: 46.20, lon: 6.14, timezone: "Europe/Zurich" },
-    { name: "Montréal", area: "Québec, Canada", lat: 45.50, lon: -73.57, timezone: "America/Toronto" },
-    { name: "London", area: "England, United Kingdom", lat: 51.51, lon: -0.13, timezone: "Europe/London" },
-    { name: "New York", area: "New York, United States", lat: 40.71, lon: -74.01, timezone: "America/New_York" }
-  ];
-
-  function onboardingLocationRows() {
-    var geo = SET.geo;
-    var curName = (ST.place && ST.place.name) || WXCFG.place || t("loc_unset");
-    var curTz = (ST.place && ST.place.timezone) || (WXCFG.timezone && WXCFG.timezone !== "auto" ? WXCFG.timezone : "");
-    var rows = [
-      info("loc-now", t("loc_now"), curName, curTz),
-      {
-        kind: "input",
-        key: "loc-search",
-        label: t("loc_search"),
-        value: geo.q,
-        act: function () {
-          startTyping({
-            label: t("loc_type"),
-            value: geo.q,
-            search: true,
-            live: function (q) { findPlaces(q, false); },
-            submit: function (q) { findPlaces(q, true); }
-          });
-        }
-      }
-    ];
-    if (geo.busy) rows.push(info("loc-busy", t("loc_searching")));
-    else if (geo.err) rows.push(info("loc-err", t("loc_error")));
-    else if (geo.list && !geo.list.length) rows.push(info("loc-none", t("loc_none", { q: geo.q })));
-
-    if (geo.list && geo.list.length) {
-      rows.push(head(t("loc_results")));
-      geo.list.forEach(function (p, i) {
-        var isCur = !!(ST.place && ST.place.lat === p.lat && ST.place.lon === p.lon);
-        rows.push({
-          kind: "choice",
-          key: "place:" + i,
-          label: p.name,
-          sub: p.area,
-          checked: isCur,
-          act: function () {
-            choosePlace(p);
-            renderSettings();
-          }
-        });
-      });
-    } else if (!geo.q) {
-      rows.push(head(t("loc_suggestions")));
-      SUGGESTED_CITIES.forEach(function (p, i) {
-        var isCur = !!(ST.place && ST.place.lat === p.lat && ST.place.lon === p.lon);
-        rows.push({
-          kind: "choice",
-          key: "sug-place:" + i,
-          label: p.name,
-          sub: p.area,
-          checked: isCur,
-          act: function () {
-            choosePlace(p);
-            renderSettings();
-          }
-        });
-      });
-    }
-    rows.push({ kind: "spacer" });
-    rows.push({ kind: "ob-nav", key: "ob-nav" });
-    return rows;
-  }
-
-  function onboardingProfilesRows() {
-    var list = NOBODY ? [] : PEOPLE, rows = [];
-    rows.push(head(t("ob_profiles_head")));
-    rows.push(info("ob-profiles-desc", t("ob_profiles_desc")));
-    if (!list.length) {
-      rows.push(info("ob-no-profiles", t("ob_no_profiles")));
-    } else {
-      list.forEach(function (p) {
-        rows.push({
-          kind: "nav",
-          key: "person:" + p.id,
-          label: p.name,
-          avatar: p,
-          act: function () { openPerson(p.id); },
-          move: function (d) { movePerson(p.id, d); }
-        });
-      });
-    }
-    if (list.length < 12) {
-      rows.push({
-        kind: "input",
-        key: "people-add",
-        label: t("people_add"),
-        act: function () {
-          startTyping({ label: t("people_type"), value: "", submit: addPerson });
-        }
-      });
-    }
-    rows.push({ kind: "spacer" });
-    rows.push({ kind: "ob-nav", key: "ob-nav" });
-    return rows;
-  }
+  // ================= Cinematic Onboarding Engine =================
+  var obStep = 0;
+  var obFocus = 0;
 
   function openOnboarding() {
-    ONBOARDING = true;
     closeGear();
-    zone = "settings";
-    SET.col = "rows";
-    SET.sec = 0;
-    SET.sub = null;
-    SET.lift = null;
-    SET.confirm = null;
-    SET.msg = "";
-    SET.obBtn = "next";
-    clearFocus();
-    $("settings").classList.add("onboarding");
-    $("settings").classList.add("on");
-    document.documentElement.classList.add("setting");
-    SET.ri = firstRow(rowsNow());
-    SET.keyFocus = rowsNow()[SET.ri] ? rowsNow()[SET.ri].key : null;
-    renderSettings();
-  }
-
-  function nextOnboardingStep() {
-    if (SET.sec < OB_SECS.length - 1) {
-      SET.sec += 1;
-      SET.col = "rows";
-      SET.sub = null;
-      SET.msg = "";
-      SET.obBtn = "next";
-      SET.ri = firstRow(rowsNow());
-      SET.keyFocus = rowsNow()[SET.ri] ? rowsNow()[SET.ri].key : null;
-      renderSettings();
-    } else {
-      finishOnboarding();
+    if ($("settings")) {
+      $("settings").classList.remove("on");
     }
+    zone = "onboarding";
+    obStep = 0;
+    obFocus = 0;
+    var overlay = $("onboarding");
+    if (overlay) overlay.classList.add("on");
+    renderOnboarding();
   }
 
-  function prevOnboardingStep() {
-    if (SET.sec > 0) {
-      SET.sec -= 1;
-      SET.col = "rows";
-      SET.sub = null;
-      SET.msg = "";
-      SET.obBtn = "next";
-      SET.ri = firstRow(rowsNow());
-      SET.keyFocus = rowsNow()[SET.ri] ? rowsNow()[SET.ri].key : null;
-      renderSettings();
-    }
-  }
-
-  function finishOnboarding() {
+  function finishOnboarding(triggerNative) {
     keep("tvhome.setup_done", true);
     saveSettings();
     savePeopleList();
-    ONBOARDING = false;
-    $("settings").classList.remove("onboarding");
-    $("settings").classList.remove("on");
-    document.documentElement.classList.remove("setting");
+    var overlay = $("onboarding");
+    if (overlay) overlay.classList.remove("on");
     zone = "grid";
     try { refreshWeather(); } catch (e) {}
     try { render(); } catch (e) {}
     try { ensureFocus(); } catch (e) {}
+    if (triggerNative) {
+      setTimeout(function () {
+        try {
+          if (TV && TV.openHomeSettings) {
+            TV.openHomeSettings();
+          }
+        } catch (e) {}
+        try {
+          if (TV && TV.requestTvPermissions) {
+            TV.requestTvPermissions();
+          }
+        } catch (e) {}
+      }, 300);
+    }
     restart();
+  }
+
+  function renderOnboarding() {
+    var card = $("ob-card");
+    if (!card) return;
+
+    var L = window.I18N;
+    var curLang = (L && L.lang) ? L.lang() : (ST.lang || "fr");
+    var isFr = curLang === "fr";
+
+    var html = "";
+
+    if (obStep === 0) {
+      // Step 0: Language selection (Instant Glide)
+      var langs = (L && L.langs && L.langs.length) ? L.langs : [
+        { id: "fr", name: "Français" },
+        { id: "en", name: "English" }
+      ];
+      if (obFocus >= langs.length) obFocus = 0;
+
+      html += '<div class="ob-badge">' + (isFr ? 'Étape 1 sur 3' : 'Step 1 of 3') + '</div>';
+      html += '<h1 class="ob-title">' + (isFr ? 'Bienvenue sur Talo TV' : 'Welcome to Talo TV') + '</h1>';
+      html += '<p class="ob-sub">' + (isFr ? 'Sélectionnez votre langue d\'affichage' : 'Choose your preferred language') + '</p>';
+      html += '<div class="ob-grid">';
+      langs.forEach(function (l, idx) {
+        var isFoc = (idx === obFocus);
+        var isSel = (l.id === curLang);
+        var flag = l.id === "fr" ? "🇫🇷" : l.id === "en" ? "🇬🇧" : l.id === "es" ? "🇪🇸" : l.id === "de" ? "🇩🇪" : "🌐";
+        var subText = l.id === "fr" ? "Français" : l.id === "en" ? "English" : l.name;
+        html += '<div class="ob-item' + (isFoc ? ' focus' : '') + (isSel ? ' selected' : '') + '" data-ob-idx="' + idx + '">';
+        html += '<span class="ob-item-icon">' + flag + '</span>';
+        html += '<span class="ob-item-title">' + esc(l.name) + '</span>';
+        html += '<span class="ob-item-sub">' + esc(subText) + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+
+    } else if (obStep === 1) {
+      // Step 1: Clock & Weather format (Instant Glide)
+      var options = [
+        {
+          id: "24c",
+          icon: "🕒",
+          title: isFr ? "Format 24h & Celsius (°C)" : "24-hour & Celsius (°C)",
+          sub: isFr ? "Recommandé en Europe (ex: 20:45 · 18°C)" : "European standard (e.g. 20:45 · 18°C)"
+        },
+        {
+          id: "12f",
+          icon: "⏰",
+          title: isFr ? "Format 12h & Fahrenheit (°F)" : "12-hour & Fahrenheit (°F)",
+          sub: isFr ? "Format standard US (ex: 8:45 PM · 65°F)" : "US standard (e.g. 8:45 PM · 65°F)"
+        }
+      ];
+      if (obFocus >= options.length) obFocus = 0;
+
+      html += '<div class="ob-badge">' + (isFr ? 'Étape 2 sur 3' : 'Step 2 of 3') + '</div>';
+      html += '<h1 class="ob-title">' + (isFr ? 'Affichage & Météo' : 'Display & Weather') + '</h1>';
+      html += '<p class="ob-sub">' + (isFr ? 'Choisissez votre format d\'heure et de température' : 'Select your clock and temperature preferences') + '</p>';
+      html += '<div class="ob-grid">';
+      options.forEach(function (opt, idx) {
+        var isFoc = (idx === obFocus);
+        var isSel = (opt.id === "24c" ? (CLOCK24 && !WX_F) : (!CLOCK24 && WX_F));
+        html += '<div class="ob-item' + (isFoc ? ' focus' : '') + (isSel ? ' selected' : '') + '" data-ob-idx="' + idx + '">';
+        html += '<span class="ob-item-icon">' + opt.icon + '</span>';
+        html += '<span class="ob-item-title">' + esc(opt.title) + '</span>';
+        html += '<span class="ob-item-sub">' + esc(opt.sub) + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+
+    } else if (obStep === 2) {
+      // Step 2: Plein Potentiel (1-click activation)
+      var actions = [
+        {
+          id: "activate",
+          primary: true,
+          label: isFr ? "Activer Talo TV à 100%" : "Activate Talo TV to 100%"
+        },
+        {
+          id: "skip",
+          primary: false,
+          label: isFr ? "Configurer plus tard" : "Set up later"
+        }
+      ];
+      if (obFocus >= actions.length) obFocus = 0;
+
+      html += '<div class="ob-badge">' + (isFr ? 'Étape 3 sur 3' : 'Step 3 of 3') + '</div>';
+      html += '<h1 class="ob-title">' + (isFr ? 'Libérez le Plein Potentiel' : 'Unleash Full Potential') + '</h1>';
+      html += '<p class="ob-sub">' + (isFr ? 'Profitez d\'une expérience TV fluide, ultra-rapide et garantie sans aucune publicité.' : 'Enjoy a smooth, ultra-fast TV experience with zero ads.') + '</p>';
+      html += '<div class="ob-perks">';
+      html += '<div class="ob-perk"><span>⚡</span> ' + (isFr ? 'Lanceur d\'accueil par défaut' : 'Default Home Launcher') + '</div>';
+      html += '<div class="ob-perk"><span>🎬</span> ' + (isFr ? 'Reprendre la lecture en 1 clic' : '1-Click Watch Next') + '</div>';
+      html += '<div class="ob-perk"><span>🛡️</span> ' + (isFr ? 'Talo Shield anti-pub' : 'Talo Shield Ad-Block') + '</div>';
+      html += '</div>';
+      html += '<div class="ob-actions">';
+      actions.forEach(function (act, idx) {
+        var isFoc = (idx === obFocus);
+        var cls = 'ob-action-btn ' + (act.primary ? 'primary' : 'secondary') + (isFoc ? ' focus' : '');
+        html += '<button type="button" class="' + cls + '" data-ob-idx="' + idx + '">' + esc(act.label) + '</button>';
+      });
+      html += '</div>';
+    }
+
+    // Dots indicator
+    html += '<div class="ob-dots">';
+    for (var d = 0; d < 3; d++) {
+      html += '<div class="ob-dot' + (d === obStep ? ' active' : '') + '"></div>';
+    }
+    html += '</div>';
+
+    card.innerHTML = html;
+  }
+
+  function moveOnboarding(dx, dy) {
+    var maxIdx = 1;
+    if (obStep === 0) {
+      var L = window.I18N;
+      var langs = (L && L.langs) ? L.langs : [1, 2];
+      maxIdx = langs.length - 1;
+    } else {
+      maxIdx = 1;
+    }
+
+    if (dx !== 0) {
+      obFocus = Math.max(0, Math.min(maxIdx, obFocus + dx));
+    } else if (dy !== 0) {
+      obFocus = Math.max(0, Math.min(maxIdx, obFocus + dy));
+    }
+    renderOnboarding();
+  }
+
+  function activateOnboarding() {
+    var L = window.I18N;
+    if (obStep === 0) {
+      // Choose language and instant glide to step 1
+      var langs = (L && L.langs && L.langs.length) ? L.langs : [
+        { id: "fr", name: "Français" },
+        { id: "en", name: "English" }
+      ];
+      var chosen = langs[obFocus] || langs[0];
+      ST.lang = chosen.id;
+      if (L && L.set) L.set(chosen.id);
+      saveSettings();
+      staticText();
+      obStep = 1;
+      obFocus = 0;
+      renderOnboarding();
+    } else if (obStep === 1) {
+      // Choose format and instant glide to step 2
+      if (obFocus === 0) {
+        CLOCK24 = true;
+        ST.clock = "24h";
+        WX_F = false;
+        ST.wx_unit = "c";
+      } else {
+        CLOCK24 = false;
+        ST.clock = "12h";
+        WX_F = true;
+        ST.wx_unit = "f";
+      }
+      saveSettings();
+      clock();
+      obStep = 2;
+      obFocus = 0;
+      renderOnboarding();
+    } else if (obStep === 2) {
+      // Step 2: Plein Potentiel
+      if (obFocus === 0) {
+        // Activate full potential: trigger native home + watch next role, then finish
+        finishOnboarding(true);
+      } else {
+        // Skip for now
+        finishOnboarding(false);
+      }
+    }
+  }
+
+  function backOnboarding() {
+    if (obStep > 0) {
+      obStep -= 1;
+      obFocus = 0;
+      renderOnboarding();
+    } else {
+      // On step 0, back doesn't trap the user; if they press back again, finish cleanly
+      finishOnboarding(false);
+    }
+  }
+
+  function initOnboarding() {
+    var overlay = $("onboarding");
+    if (!overlay) return;
+    overlay.addEventListener("click", function (e) {
+      var item = e.target.closest("[data-ob-idx]");
+      if (!item) return;
+      var idx = parseInt(item.getAttribute("data-ob-idx"), 10);
+      if (!isNaN(idx)) {
+        obFocus = idx;
+        activateOnboarding();
+      }
+    });
   }
 
   function languageRows() {
@@ -2651,7 +2608,7 @@
   }
   function personById(id) { return NOBODY ? null : PEOPLE.filter(function (p) { return p.id === id; })[0] || null; }
   function openPerson(id) {
-    SET.sub = { back: "person:" + id, crumb: ONBOARDING ? t("ob_profiles") : t("sec_people"),
+    SET.sub = { back: "person:" + id, crumb: t("sec_people"),
       title: function () { var p = personById(id); return p ? p.name : ""; },
       rows: function () {
         var p = personById(id);
@@ -2988,33 +2945,6 @@
       return;
     }
     SET.confirm = null;
-    if (ONBOARDING) {
-      var cur = rows[SET.ri];
-      if (cur && cur.kind === "ob-nav") {
-        if (dx < 0 && SET.sec > 0) {
-          SET.obBtn = "prev";
-          renderSettings();
-          return;
-        }
-        if (dx > 0) {
-          SET.obBtn = "next";
-          renderSettings();
-          return;
-        }
-      }
-      if (dy) {
-        var nextRi = stepRow(rows, SET.ri, dy);
-        if (nextRi !== SET.ri) {
-          SET.ri = nextRi;
-          SET.keyFocus = rows[SET.ri] ? rows[SET.ri].key : null;
-          if (rows[SET.ri] && rows[SET.ri].kind === "ob-nav" && !SET.obBtn) {
-            SET.obBtn = "next";
-          }
-        }
-      }
-      renderSettings();
-      return;
-    }
     var maxSecs = SECS.length;
     if (SET.col === "secs") {
       if (dy) {
@@ -3032,15 +2962,6 @@
     if (SET.col === "secs") { enterRows(); renderSettings(); return; }
     if (SET.sub && Date.now() - subOpenedAt < 250) return;
     var rows = rowsNow(), r = rows[SET.ri];
-    if (ONBOARDING && r && r.kind === "ob-nav") {
-      if (SET.obBtn === "prev") {
-        prevOnboardingStep();
-      } else {
-        if (SET.sec < OB_SECS.length - 1) nextOnboardingStep();
-        else finishOnboarding();
-      }
-      return;
-    }
     if (!focusable(r) || !r.act) return;
     if (r.danger && SET.confirm !== r.key) { SET.confirm = r.key; renderSettings(); return; }
     SET.confirm = null;
@@ -3077,41 +2998,12 @@
       renderSettings();
       return;
     }
-    if (ONBOARDING) {
-      if (SET.sec > 0) {
-        prevOnboardingStep();
-      } else {
-        finishOnboarding();
-      }
-      return;
-    }
     closeSettings();
   }
 
   // ---- drawing it ----
   function rowHTML(r, i) {
     if (r.kind === "spacer") return '<div class="sspacer"></div>';
-    if (r.kind === "ob-nav") {
-      var isLast = SET.sec === OB_SECS.length - 1;
-      var showPrev = SET.sec > 0;
-      var isRowFocused = SET.col === "rows" && i === SET.ri;
-      var prevFocus = isRowFocused && showPrev && SET.obBtn === "prev";
-      var nextFocus = isRowFocused && (!showPrev || SET.obBtn === "next" || !SET.obBtn || SET.obBtn !== "prev");
-      var prevLabel = t("ob_prev");
-      var nextLabel = isLast ? t("ob_finish") : t("ob_next");
-      var prevSvg = '<svg viewBox="0 0 24 24" style="transform:rotate(180deg)"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>';
-      var nextSvg = isLast
-        ? '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
-        : '<svg viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>';
-
-      var html = '<div class="ob-nav-pair' + (isRowFocused ? ' focus' : '') + '">';
-      if (showPrev) {
-        html += '<button type="button" class="ob-btn ob-btn-prev' + (prevFocus ? ' focus' : '') + '">' + prevSvg + '<span>' + esc(prevLabel) + '</span></button>';
-      }
-      html += '<button type="button" class="ob-btn ob-btn-next' + (nextFocus ? ' focus' : '') + '"><span>' + esc(nextLabel) + '</span>' + nextSvg + '</button>';
-      html += '</div>';
-      return html;
-    }
     if (r.kind === "head") return '<div class="shead">' + esc(r.label) + "</div>";
     var f = SET.col === "rows" && i === SET.ri, lifted = SET.lift === r.key;
     var cls = "srow k-" + r.kind + (f ? " focus" : "") + (lifted ? " lifted" : "") + (r.danger ? " danger" : "");
@@ -3139,12 +3031,6 @@
   function renderSettings() {
     var rows = rowsNow();
     if (SET.sub && !rows.length) { SET.sub = null; rows = rowsNow(); }
-    if (ONBOARDING) {
-      SET.col = "rows";
-      $("settings").classList.add("onboarding");
-    } else {
-      $("settings").classList.remove("onboarding");
-    }
     if (SET.col === "rows") {
       var k = SET.keyFocus ? indexOfKey(rows, SET.keyFocus) : -1;
       if (k >= 0 && focusable(rows[k])) SET.ri = k;
@@ -3153,25 +3039,24 @@
         if (!focusable(rows[SET.ri])) { var back = stepRow(rows, SET.ri, -1); SET.ri = back !== SET.ri ? back : stepRow(rows, SET.ri, 1); }
       }
       if (focusable(rows[SET.ri])) SET.keyFocus = rows[SET.ri].key;
-      else if (!ONBOARDING) SET.col = "secs";
+      else SET.col = "secs";
     }
-    var isPermSec = (!ONBOARDING && SECS[SET.sec] && SECS[SET.sec][0] === "permissions") || (ONBOARDING && OB_SECS[SET.sec] && OB_SECS[SET.sec][0] === "ob_perms");
+    var isPermSec = SECS[SET.sec] && SECS[SET.sec][0] === "permissions";
     var pSig = isPermSec ? JSON.stringify(getPermissionsStatus()) : "";
-    var isShieldSec = !ONBOARDING && SECS[SET.sec] && SECS[SET.sec][0] === "shield";
+    var isShieldSec = SECS[SET.sec] && SECS[SET.sec][0] === "shield";
     var sSig = isShieldSec ? (JSON.stringify(ST.shield_disabled || []) + ":" + (ST.shield_enabled !== false) + ":" + (ST.shield_mode || "") + ":" + (ST.shield_debloat_applied ? "1" : "0") + ":" + (TV && TV.isShieldVpnRunning ? TV.isShieldVpnRunning() : "") + ":" + (TV && TV.getPrivateDnsInfo ? TV.getPrivateDnsInfo() : "")) : "";
-    var currentSecKey = (ONBOARDING ? "ob:" : "sec:") + SET.sec + ":" + (SET.sub ? (SET.sub.back || "sub") : "root") + ":" + (SET.lift || "") + ":" + (SET.confirm || "") + ":" + rows.length + ":" + pSig + ":" + sSig;
+    var currentSecKey = "sec:" + SET.sec + ":" + (SET.sub ? (SET.sub.back || "sub") : "root") + ":" + (SET.lift || "") + ":" + (SET.confirm || "") + ":" + rows.length + ":" + pSig + ":" + sSig;
     var box = $("set-rows");
     if (currentSecKey !== lastRenderedSecKey || box.children.length !== rows.length) {
       lastRenderedSecKey = currentSecKey;
-      $("set-title").textContent = ONBOARDING ? t("setup_title") : t("set_title");
-      var secsList = ONBOARDING ? OB_SECS : SECS;
-      $("set-secs").innerHTML = secsList.map(function (sc, i) {
+      $("set-title").textContent = t("set_title");
+      $("set-secs").innerHTML = SECS.map(function (sc, i) {
         var cls = "ssec" + (i === SET.sec ? (SET.col === "secs" ? " focus" : " on") : "");
-        var label = ONBOARDING ? t(sc[0]) : t("sec_" + sc[0]);
+        var label = t("sec_" + sc[0]);
         return '<div class="' + cls + '"><i>' + (ICONS[sc[1]] || "") + "</i><span>" + esc(label) + "</span></div>";
       }).join("");
-      $("set-crumb").textContent = SET.sub ? SET.sub.crumb : (ONBOARDING ? (SET.sec + 1) + " / " + OB_SECS.length : "");
-      $("set-head").textContent = SET.sub ? SET.sub.title() : (ONBOARDING ? t(OB_SECS[SET.sec][0] + "_head") : t("sec_" + SECS[SET.sec][0]));
+      $("set-crumb").textContent = SET.sub ? SET.sub.crumb : "";
+      $("set-head").textContent = SET.sub ? SET.sub.title() : t("sec_" + SECS[SET.sec][0]);
       box.innerHTML = rows.map(rowHTML).join("");
     } else {
       var ssecs = $("set-secs").children;
@@ -3188,22 +3073,11 @@
         }
       }
     }
-    // Always sync focus state on onboarding nav buttons (prev/next)
-    var navPair = box.querySelector(".ob-nav-pair");
-    if (navPair) {
-      var isNavRow = (SET.col === "rows" && rows[SET.ri] && rows[SET.ri].kind === "ob-nav");
-      var showPrevBtn = SET.sec > 0;
-      var prevEl = navPair.querySelector(".ob-btn-prev");
-      var nextEl = navPair.querySelector(".ob-btn-next");
-      if (prevEl) prevEl.classList.toggle("focus", isNavRow && showPrevBtn && SET.obBtn === "prev");
-      if (nextEl) nextEl.classList.toggle("focus", isNavRow && (!showPrevBtn || SET.obBtn === "next" || !SET.obBtn || SET.obBtn !== "prev"));
-      navPair.classList.toggle("focus", isNavRow);
-    }
     $("set-msg").textContent = SET.msg || "";
     var cur = rows[SET.ri];
     $("set-hint").textContent = SET.typing ? t("hint_typing") : SET.lift ? t("hint_lift") : SET.col === "secs" ? t("hint_secs") :
       cur && cur.move ? t("hint_rows_move") : t("hint_rows");
-    var f = box.querySelector(".srow.focus, .ob-btn.focus, .ob-nav-pair.focus");
+    var f = box.querySelector(".srow.focus");
     if (!f) { box.scrollTop = 0; return; }
     var boxRect = box.getBoundingClientRect();
     var fRect = f.getBoundingClientRect();
@@ -3232,17 +3106,6 @@
     });
     $("set-rows").addEventListener("click", function (e) {
       if (Date.now() - subOpenedAt < 350) return;
-      var prevBtn = e.target.closest(".ob-btn-prev");
-      if (prevBtn) {
-        prevOnboardingStep();
-        return;
-      }
-      var nextBtn = e.target.closest(".ob-btn-next");
-      if (nextBtn) {
-        if (SET.sec < OB_SECS.length - 1) nextOnboardingStep();
-        else finishOnboarding();
-        return;
-      }
       var item = e.target.closest(".srow");
       if (!item) return;
       var rows = rowsNow();
@@ -3250,7 +3113,7 @@
       var idx = srows.indexOf(item);
       var fCount = -1;
       for (var r = 0; r < rows.length; r++) {
-        if (rows[r].kind !== "head" && rows[r].kind !== "spacer" && rows[r].kind !== "ob-nav") {
+        if (rows[r].kind !== "head" && rows[r].kind !== "spacer") {
           fCount++;
           if (fCount === idx) {
             SET.col = "rows";
@@ -3530,6 +3393,7 @@
     readConfig();
     staticText();
     initSettings();
+    initOnboarding();
     resetAmbientTimer();
     mark("app-start");
     clock();
