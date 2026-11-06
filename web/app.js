@@ -1389,17 +1389,23 @@
     if (zone === "shelf") {
       var it = data.shows[s];
       if (!it) return;
+      var pkg = (it.app && it.app.package) || "";
       status(it.app ? t("opening_in", { title: it.title, app: it.app.name }) : t("opening", { title: it.title }), true);
-      if (it.wn && TV && TV.openWatchNext) {
-        if (!TV.openWatchNext(String(it.id)) && it.app) TV.launch(it.app.package);
+      if (TV && TV.openWatchNext && (pkg || it.id)) {
+        if (pkg) TV.openWatchNext(pkg, it.intent_uri || "");
+        else TV.openWatchNext(String(it.id));
         status("");
         return;
       }
-      api("POST", "/api/continue/open", { id: it.id, who: NOBODY ? "both" : who }, 60000)
+      if (TV && pkg) {
+        TV.launch(pkg);
+        status("");
+        return;
+      }
+      api("POST", "/api/continue/open", { id: it.id, who: NOBODY ? "both" : who }, 5000)
         .then(function (res) { status(res.note || ""); })
         .catch(function (e) {
-          // the bridge can't help: at least open the app it was in
-          if (TV && it.app && TV.launch(it.app.package)) { status(""); return; }
+          if (TV && pkg && TV.launch(pkg)) { status(""); return; }
           status(e.message);
         });
       return;
@@ -1637,6 +1643,9 @@
 
   function openSystemSheet(fn) {
     document.body.classList.add("system-sheet-open");
+    setTimeout(function () {
+      document.body.classList.remove("system-sheet-open");
+    }, 1200);
     try { fn(); } catch (e) {}
     invalidateSettingsCache();
   }
@@ -3071,10 +3080,11 @@
     if (ONBOARDING) {
       if (SET.sec > 0) {
         prevOnboardingStep();
+      } else {
+        finishOnboarding();
       }
       return;
     }
-    if (SET.col === "rows") { leaveRows(); renderSettings(); return; }
     closeSettings();
   }
 
@@ -3085,8 +3095,8 @@
       var isLast = SET.sec === OB_SECS.length - 1;
       var showPrev = SET.sec > 0;
       var isRowFocused = SET.col === "rows" && i === SET.ri;
-      var prevFocus = isRowFocused && SET.obBtn === "prev";
-      var nextFocus = isRowFocused && (SET.obBtn === "next" || !SET.obBtn);
+      var prevFocus = isRowFocused && showPrev && SET.obBtn === "prev";
+      var nextFocus = isRowFocused && (!showPrev || SET.obBtn === "next" || !SET.obBtn || SET.obBtn !== "prev");
       var prevLabel = t("ob_prev");
       var nextLabel = isLast ? t("ob_finish") : t("ob_next");
       var prevSvg = '<svg viewBox="0 0 24 24" style="transform:rotate(180deg)"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>';
@@ -3094,7 +3104,7 @@
         ? '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
         : '<svg viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>';
 
-      var html = '<div class="ob-nav-pair">';
+      var html = '<div class="ob-nav-pair' + (isRowFocused ? ' focus' : '') + '">';
       if (showPrev) {
         html += '<button type="button" class="ob-btn ob-btn-prev' + (prevFocus ? ' focus' : '') + '">' + prevSvg + '<span>' + esc(prevLabel) + '</span></button>';
       }
@@ -3178,13 +3188,29 @@
         }
       }
     }
+    // Always sync focus state on onboarding nav buttons (prev/next)
+    var navPair = box.querySelector(".ob-nav-pair");
+    if (navPair) {
+      var isNavRow = (SET.col === "rows" && rows[SET.ri] && rows[SET.ri].kind === "ob-nav");
+      var showPrevBtn = SET.sec > 0;
+      var prevEl = navPair.querySelector(".ob-btn-prev");
+      var nextEl = navPair.querySelector(".ob-btn-next");
+      if (prevEl) prevEl.classList.toggle("focus", isNavRow && showPrevBtn && SET.obBtn === "prev");
+      if (nextEl) nextEl.classList.toggle("focus", isNavRow && (!showPrevBtn || SET.obBtn === "next" || !SET.obBtn || SET.obBtn !== "prev"));
+      navPair.classList.toggle("focus", isNavRow);
+    }
     $("set-msg").textContent = SET.msg || "";
     var cur = rows[SET.ri];
     $("set-hint").textContent = SET.typing ? t("hint_typing") : SET.lift ? t("hint_lift") : SET.col === "secs" ? t("hint_secs") :
       cur && cur.move ? t("hint_rows_move") : t("hint_rows");
-    var f = box.querySelector(".srow.focus, .ob-btn.focus");
+    var f = box.querySelector(".srow.focus, .ob-btn.focus, .ob-nav-pair.focus");
     if (!f) { box.scrollTop = 0; return; }
-    var top = f.offsetTop, bottom = top + f.offsetHeight, view = box.clientHeight, edge = view / 4;
+    var boxRect = box.getBoundingClientRect();
+    var fRect = f.getBoundingClientRect();
+    var top = fRect.top - boxRect.top + box.scrollTop;
+    var bottom = top + fRect.height;
+    var view = box.clientHeight;
+    var edge = view / 4;
     if (top - edge < box.scrollTop) box.scrollTop = Math.max(0, top - edge);
     else if (bottom + edge > box.scrollTop + view) box.scrollTop = bottom + edge - view;
   }

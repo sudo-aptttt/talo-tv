@@ -254,14 +254,7 @@ class MainActivity : Activity() {
     }
 
     fun showSolidBackdrop() {
-        val action = Runnable {
-            solidBackdropView?.apply {
-                visibility = View.VISIBLE
-                bringToFront()
-            }
-            web?.visibility = View.INVISIBLE
-        }
-        if (Looper.myLooper() == Looper.getMainLooper()) action.run() else main.post(action)
+        // Keeping WebView visible prevents black screen freezes when dialogs or sub-activities appear
     }
 
     fun hideSolidBackdrop() {
@@ -869,9 +862,36 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun watchNext(): String = readWatchNext().toString()
 
+        /** Opens one Watch Next item non-blockingly using package and intent URI. */
+        @JavascriptInterface
+        fun openWatchNext(pkg: String, intentUri: String): Boolean {
+            main.post {
+                try {
+                    if (intentUri.isNotBlank()) {
+                        val i = Intent.parseUri(intentUri, Intent.URI_INTENT_SCHEME)
+                        if (i.component != null && i.component!!.packageName != pkg) i.component = null
+                        i.`package` = pkg
+                        i.selector = null
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        if (i.resolveActivity(packageManager) != null) {
+                            startActivity(i)
+                            return@post
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("TaloTV", "Failed to parse/launch watch next intent: $intentUri", e)
+                }
+                launchPackage(pkg)
+            }
+            return true
+        }
+
         /** Opens one Watch Next item (its row id) in the app that owns it. */
         @JavascriptInterface
-        fun openWatchNext(id: String): Boolean = openWatchNextItem(id)
+        fun openWatchNext(id: String): Boolean {
+            io.execute { openWatchNextItem(id) }
+            return true
+        }
 
         @JavascriptInterface
         fun openSettings(): Boolean {
@@ -1167,13 +1187,34 @@ class MainActivity : Activity() {
         fun openHomeSettings(): Boolean {
             TaloAccessibilityService.userRequestedTvSettings = true
             main.post {
-                showSolidBackdrop()
                 try {
                     Toast.makeText(this@MainActivity, "Sélectionnez « Talo TV » comme écran d'accueil", Toast.LENGTH_LONG).show()
                 } catch (_: Exception) {}
+
+                // Android 10+ (API 29+) standard RoleManager for Home Launcher
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        val roleManager = getSystemService(android.app.role.RoleManager::class.java)
+                        if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
+                            if (!roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
+                                val roleIntent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
+                                roleIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                startActivity(roleIntent)
+                                return@post
+                            } else {
+                                Toast.makeText(this@MainActivity, "Talo TV est déjà votre écran d'accueil", Toast.LENGTH_SHORT).show()
+                                return@post
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("TaloTV", "RoleManager request failed, fallback to intents", e)
+                    }
+                }
+
                 val intents = listOf(
                     Intent(Settings.ACTION_HOME_SETTINGS),
                     Intent("android.settings.MANAGE_DEFAULT_APPS_SETTINGS"),
+                    Intent("android.settings.HOME_SETTINGS"),
                     Intent(Settings.ACTION_SETTINGS)
                 )
                 for (intent in intents) {
@@ -1183,7 +1224,6 @@ class MainActivity : Activity() {
                         return@post
                     } catch (_: Exception) {}
                 }
-                hideSolidBackdrop()
             }
             return true
         }
@@ -1731,9 +1771,10 @@ class MainActivity : Activity() {
         try {
             val cols = arrayOf("_id", "package_name", "title", "episode_title", "season_display_number",
                 "episode_display_number", "poster_art_uri", "thumbnail_uri", "last_playback_position_millis",
-                "duration_millis", "last_engagement_time_utc_millis")
+                "duration_millis", "last_engagement_time_utc_millis", "intent_uri")
             contentResolver.query(WATCH_NEXT, cols, null, null, "last_engagement_time_utc_millis DESC")?.use { c ->
                 val perApp = HashMap<String, Int>()
+                val intentUriCol = c.getColumnIndex("intent_uri")
                 while (c.moveToNext() && out.length() < 12) {
                     val pkg = c.getString(1) ?: continue
                     if (pkg == packageName) continue
@@ -1747,6 +1788,7 @@ class MainActivity : Activity() {
                     } catch (e: Exception) { pkg }
                     val pos = c.getLong(8)
                     val dur = c.getLong(9)
+                    val rawIntentUri = if (intentUriCol >= 0) c.getString(intentUriCol) ?: "" else ""
                     out.put(JSONObject().apply {
                         put("id", c.getLong(0).toString())
                         put("wn", true)
@@ -1754,6 +1796,7 @@ class MainActivity : Activity() {
                         put("episode_title", c.getString(3) ?: "")
                         put("season", c.getString(4) ?: "")
                         put("episode", c.getString(5) ?: "")
+                        put("intent_uri", rawIntentUri)
                         if (art != null) put("backdrop", "http://tvos.invalid/art/" + android.util.Base64.encodeToString(
                             art.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING))
                         if (dur > 0 && pos > 0) put("progress", (pos.toDouble() / dur).coerceIn(0.0, 1.0))
