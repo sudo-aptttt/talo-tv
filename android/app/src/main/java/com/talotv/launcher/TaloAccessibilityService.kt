@@ -33,12 +33,39 @@ class TaloAccessibilityService : AccessibilityService() {
         }
     }
 
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        try {
+            val info = serviceInfo ?: android.accessibilityservice.AccessibilityServiceInfo()
+            info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            info.feedbackType = android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_GENERIC
+            info.flags = info.flags or
+                android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or
+                android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            info.notificationTimeout = 50
+            serviceInfo = info
+            Log.i("TaloAccessibility", "TaloAccessibilityService connected and configured successfully!")
+        } catch (e: Exception) {
+            Log.e("TaloAccessibility", "Error in onServiceConnected", e)
+        }
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Intercepting system settings packages here previously caused Android TV's settings app
-        // to be hijacked and pulled away while the user was toggling the switch ON,
-        // which caused Android to immediately uncheck the accessibility service.
-        // Remote button overrides (Settings, Menu, Live, Guide, Watchlist, Home) are fully
-        // and reliably handled below in onKeyEvent().
+        if (event == null) return
+        val pkg = event.packageName?.toString() ?: return
+
+        // Intercept stock Google TV / Android TV launcher to bring Talo TV to the front when Home is pressed
+        if (pkg == "com.google.android.apps.tv.launcherx" ||
+            pkg == "com.google.android.tvlauncher" ||
+            pkg == "com.google.android.leanbacklauncher" ||
+            pkg == "com.android.tv.launcher") {
+            val now = System.currentTimeMillis()
+            if (now - lastInterceptTime > 500) {
+                lastInterceptTime = now
+                Log.i("TaloAccessibility", "Stock launcher $pkg detected, redirecting to Talo TV Home")
+                MainActivity.handleRemoteAction(this, "home")
+            }
+        }
     }
 
     override fun onInterrupt() {

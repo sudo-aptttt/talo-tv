@@ -1667,6 +1667,18 @@
       },
       {
         kind: "action",
+        key: "perm:restricted",
+        label: t("perm_restricted_title"),
+        sub: t("perm_restricted_sub"),
+        value: t("perm_unlock"),
+        act: function () {
+          openSystemSheet(function () {
+            if (TV && TV.openAppDetailsSettings) TV.openAppDetailsSettings();
+          });
+        }
+      },
+      {
+        kind: "action",
         key: "perm:tv",
         label: t("perm_tv_title"),
         sub: t("perm_tv_sub"),
