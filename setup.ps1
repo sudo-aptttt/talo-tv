@@ -1,8 +1,9 @@
 # =====================================================================
 # Talo TV - Script d'installation et activation automatique Windows
 # =====================================================================
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$Host.UI.RawUI.WindowTitle = "Talo TV - Activation Automatique Android 14"
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+try { $Host.UI.RawUI.WindowTitle = "Talo TV - Activation Automatique Android 14" } catch {}
 
 Write-Host ""
 Write-Host " ================================================================" -ForegroundColor Cyan
